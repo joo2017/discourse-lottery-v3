@@ -1,0 +1,55 @@
+<!-- file: discourse-lottery-v3/assets/javascripts/discourse/templates/connectors/composer-after-title/lottery-form.hbs -->
+
+{{#if controller.showLotteryForm}}
+  <div class="lottery-form-container">
+    <div class="control-group">
+      <label class="control-label">{{i18n "lottery.form.prize_name.label"}}</label>
+      {{input type="text" value=controller.model.lotteryPrizeName required="true" class="d-input"}}
+    </div>
+
+    <div class="control-group">
+      <label class="control-label">{{i18n "lottery.form.prize_details.label"}}</label>
+      {{textarea value=controller.model.lotteryPrizeDetails class="d-textarea"}}
+    </div>
+
+    <div class="control-group">
+      <label class="control-label">{{i18n "lottery.form.draw_time.label"}}</label>
+      {{date-time-picker value=controller.model.lotteryDrawTime}}
+    </div>
+
+    <div class="control-group">
+      <label class="control-label">{{i18n "lottery.form.winners_count.label"}}</label>
+      {{number-input value=controller.model.lotteryWinnersCount min="1" required="true"}}
+      <p class="instructions">{{i18n "lottery.form.winners_count.description"}}</p>
+    </div>
+
+    <div class="control-group">
+      <label class="control-label">{{i18n "lottery.form.specified_posts.label"}}</label>
+      {{input type="text" value=controller.model.lotterySpecifiedPosts class="d-input"}}
+      <p class="instructions">{{i18n "lottery.form.specified_posts.description"}}</p>
+    </div>
+
+    <div class="control-group">
+      <label class="control-label">{{i18n "lottery.form.min_participants.label"}}</label>
+      {{number-input value=controller.model.lotteryMinParticipants min="1" required="true" change=(action "validateMinParticipants")}}
+      {{#if controller.minParticipantsError}}
+        <p class="error-message">{{controller.minParticipantsError}}</p>
+      {{/if}}
+    </div>
+
+    <div class="control-group">
+      <label class="control-label">{{i18n "lottery.form.backup_strategy.label"}}</label>
+      {{combo-box
+        value=controller.model.lotteryBackupStrategy
+        content=controller.backupStrategyOptions
+        valueProperty="id"
+        nameProperty="name"
+      }}
+    </div>
+
+    <div class="control-group">
+      <label class="control-label">{{i18n "lottery.form.extra_info.label"}}</label>
+      {{textarea value=controller.model.lotteryExtraInfo class="d-textarea"}}
+    </div>
+  </div>
+{{/if}}
