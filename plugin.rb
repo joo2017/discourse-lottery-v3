@@ -6,11 +6,13 @@
 # authors: [Your Name]
 # url: [Your GitHub Repo URL]
 
-# 核心修正：我们已经删除了错误的 `load` 语句。
-# Discourse会自动加载 config/settings.yml 文件。
-
 enabled_site_setting :lottery_enabled
 
+# 注册前端资源，这样 Discourse 的 asset pipeline 才会编译和加载它们
+register_asset "stylesheets/lottery.scss" # 我们暂时还没用到 CSS，但先注册好
+register_asset "javascripts/discourse/templates/connectors/composer-after-title/lottery-form.hbs"
+
+
 after_initialize do
-  # ... 后续代码将在此处添加 ...
+  # ... 所有核心的后端逻辑将从这里开始挂载 ...
 end
