@@ -1,14 +1,21 @@
+# file: discourse-lottery-v3/config/settings.yml
+
 plugins:
   lottery_enabled:
     default: true
-    client: true # 我们需要前端知道插件是否开启
+    client: false # 此设置仅用于服务器端判断，无需暴露给前端
+
   lottery_min_participants_global:
     default: 5
     min: 1
-    client: true # 关键：将此值暴露给前端用于实时校验
+    client: true # 关键：必须为true，以便前端JS可以获取此值进行实时校验
+
   lottery_post_lock_delay_minutes:
     default: 30
     min: 0
+    client: false
+
   lottery_excluded_groups:
     default: ""
     type: "group_list"
+    client: false
