@@ -8,11 +8,11 @@
 
 enabled_site_setting :lottery_enabled
 
-# 注册前端资源，这样 Discourse 的 asset pipeline 才会编译和加载它们
-register_asset "stylesheets/lottery.scss" # 我们暂时还没用到 CSS，但先注册好
-register_asset "javascripts/discourse/templates/connectors/composer-after-title/lottery-form.hbs"
-
-
 after_initialize do
-  # ... 所有核心的后端逻辑将从这里开始挂载 ...
+  # This is the main entry point for our plugin's server-side logic.
+  # All backend code, such as event listeners, model extensions, and service definitions,
+  # will be loaded or required from within this block.
+  #
+  # For now, it remains empty as we have not yet implemented the backend logic
+  # for creating a lottery. That will be our next step.
 end
