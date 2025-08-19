@@ -6,8 +6,8 @@
 # authors: [Your Name]
 # url: [Your GitHub Repo URL]
 
-# 注册并加载我们的站点配置文件
-load File.expand_path('config/settings.yml', __dir__)
+# 核心修正：我们已经删除了错误的 `load` 语句。
+# Discourse会自动加载 config/settings.yml 文件。
 
 enabled_site_setting :lottery_enabled
 
