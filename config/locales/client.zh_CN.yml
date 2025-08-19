@@ -1,0 +1,26 @@
+# file: discourse-lottery-v3/config/locales/client.zh_CN.yml
+zh_CN:
+  lottery:
+    form:
+      prize_name:
+        label: "活动名称"
+      prize_details:
+        label: "奖品说明"
+      draw_time:
+        label: "开奖时间"
+      winners_count:
+        label: "获奖人数"
+        description: "这是随机抽奖时的获奖人数。如果您想按指定楼层开奖，请直接填写下面的‘指定中奖楼层’项。"
+      specified_posts:
+        label: "指定中奖楼层 (可选)"
+        description: "填写此项将覆盖随机抽奖。请在此填写具体的楼层号，用英文逗号分隔，例如：8,18,28"
+      min_participants:
+        label: "参与门槛"
+        error: "参与门槛不能低于管理员设定的全局门槛 %{count} 人。"
+      backup_strategy:
+        label: "后备策略"
+        options:
+          continue: "当开奖时人数不足，继续开奖"
+          cancel: "当开奖时人数不足，取消活动"
+      extra_info:
+        label: "补充说明 (可选)"
