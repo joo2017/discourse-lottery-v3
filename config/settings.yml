@@ -1,0 +1,14 @@
+plugins:
+  lottery_enabled:
+    default: true
+    client: true # 我们需要前端知道插件是否开启
+  lottery_min_participants_global:
+    default: 5
+    min: 1
+    client: true # 关键：将此值暴露给前端用于实时校验
+  lottery_post_lock_delay_minutes:
+    default: 30
+    min: 0
+  lottery_excluded_groups:
+    default: ""
+    type: "group_list"
