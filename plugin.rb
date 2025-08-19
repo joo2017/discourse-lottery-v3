@@ -6,10 +6,11 @@
 # authors: [Your Name]
 # url: [Your GitHub Repo URL]
 
+# 注册并加载我们的站点配置文件
+load File.expand_path('config/settings.yml', __dir__)
+
 enabled_site_setting :lottery_enabled
 
-# ... 后续代码将在此处添加 ...
-
 after_initialize do
-  # ... 所有核心的后端逻辑将从这里开始挂载 ...
+  # ... 后续代码将在此处添加 ...
 end
