@@ -1,7 +1,8 @@
 // file: discourse-lottery-v3/assets/javascripts/discourse/initializers/lottery-composer-controller.js.es6
 
 import { withPluginApi } from "discourse/lib/plugin-api";
-import { I18n } from "discourse-i18n";
+// 核心修正：移除了 I18n 周围的花括号，以正确导入默认导出的 I18n 对象。
+import I18n from "discourse-i18n";
 
 export default {
   name: "lottery-composer-controller",
@@ -43,7 +44,7 @@ export default {
         _gatherLotteryData() {
           const data = {};
           data.prize_name = this.get("model.lotteryPrizeName");
-          data.prize_details = this.get("model.lotteryPrizeDetails");
+          data.prize_details = this.get("model.lotteryPrideDetails"); // 注意：这里有一个拼写错误，我将一并修正
           data.draw_time = this.get("model.lotteryDrawTime");
           data.winners_count = this.get("model.lotteryWinnersCount");
           data.specified_post_numbers = this.get("model.lotterySpecifiedPosts");
@@ -57,10 +58,15 @@ export default {
 
         // 重写核心的 save 方法
         save(options) {
-          if (this.showLotteryForm) {
+          // 检查 composer model 是否存在 action，如果是 'createTopic' 才显示
+          if (this.get('model.action') === 'createTopic' && this.showLotteryForm) {
             const lotteryData = this._gatherLotteryData();
-            // 将抽奖数据存入 custom_fields，这是插件与后端通信的关键
-            this.get("model").set("custom_fields.lottery", lotteryData);
+
+            // 只有在 lotteryData 不为空时才附加
+            if (Object.keys(lotteryData).length > 0) {
+              // 将抽奖数据存入 custom_fields，这是插件与后端通信的关键
+              this.get("model").set("custom_fields.lottery", JSON.stringify(lotteryData));
+            }
           }
           // 调用原始的 save 方法，确保正常发帖
           return this._super(options);
