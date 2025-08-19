@@ -7,17 +7,22 @@ export default {
   name: "lottery-composer-controller",
 
   initialize() {
-    // ================== DEBUGGING PROBE ==================
-    // 我们在这里添加了一条日志。如果文件被成功加载和执行，
-    // 我们就一定能在浏览器的控制台里看到这条消息。
+    // 探针 1 (我们已经确认它可以工作)
     console.log("Lottery Plugin: Initializer running!");
-    // =====================================================
 
     withPluginApi("1.0.0", (api) => {
+      // ================== DEBUGGING PROBE 2 ==================
+      // 这是新的、更深层的探针。
+      // 如果我们能看到这条日志，说明 api.modifyClass 至少被调用了。
+      console.log("Lottery Plugin: Attempting to modify Composer Controller...");
+      // =======================================================
+
       api.modifyClass("controller:composer", {
         pluginId: "DiscourseLotteryV3", 
 
-        showLotteryForm: true, 
+        // 我们把 showLotteryForm 的逻辑改得更健壮一些
+        // 使用 computed property 来确保它只在新建主题时为 true
+        showLotteryForm: Ember.computed.equal('model.action', 'createTopic'),
 
         minParticipantsError: null,
 
@@ -28,6 +33,10 @@ export default {
 
         actions: {
           validateMinParticipants() {
+            // ================== DEBUGGING PROBE 3 ==================
+            // 如果连这个日志都能看到，那就说明一切正常，问题可能非常诡异
+            console.log("Lottery Plugin: validateMinParticipants action triggered!");
+            // =======================================================
             const minParticipants = this.get("model.lotteryMinParticipants");
             const globalMin = api.container.lookup("site-settings:main").lottery_min_participants_global;
 
@@ -53,7 +62,7 @@ export default {
         },
 
         save(options) {
-          if (this.get('model.action') === 'createTopic' && this.showLotteryForm) {
+          if (this.showLotteryForm) { // 现在可以直接用这个属性了
             const lotteryData = this._gatherLotteryData();
             if (Object.keys(lotteryData).length > 0) {
               this.get("model").set("custom_fields.lottery", JSON.stringify(lotteryData));
