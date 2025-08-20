@@ -14,27 +14,23 @@ export default {
 
     withPluginApi("1.0.0", (api) => {
       api.modifyClass("controller:composer", {
-        pluginId: "DiscourseLotteryV3",
+        pluginId: "discourse-lottery-v3",
 
-        // 最终的、正确的显示逻辑
         showLotteryForm() {
           const allowedCategoriesSetting = siteSettings.lottery_allowed_categories || "";
           const allowedCategories = allowedCategoriesSetting.split('|').map(Number).filter(id => id > 0);
           const currentCategoryId = this.get('model.categoryId');
 
-          // 必须是新建主题，且当前分类在允许列表中
           return this.get('model.action') === 'createTopic' && 
                  allowedCategories.length > 0 && 
                  allowedCategories.includes(currentCategoryId);
         },
         
         minParticipantsError: null,
-
         backupStrategyOptions: [
           { id: 'continue', name: I18n.t('lottery.form.backup_strategy.options.continue') },
           { id: 'cancel', name: I18n.t('lottery.form.backup_strategy.options.cancel') }
         ],
-
         actions: {
           validateMinParticipants() {
             const minParticipants = this.get("model.lotteryMinParticipants");
@@ -45,7 +41,6 @@ export default {
             }
           }
         },
-        
         _gatherLotteryData() {
             const data = {};
             data.prize_name = this.get("model.lotteryPrizeName");
@@ -57,7 +52,6 @@ export default {
             data.backup_strategy = this.get("model.lotteryBackupStrategy") || 'continue';
             return Object.fromEntries(Object.entries(data).filter(([_, v]) => v != null && v !== ''));
         },
-        
         save(options) {
             if (this.showLotteryForm()) {
                 const lotteryData = this._gatherLotteryData();
