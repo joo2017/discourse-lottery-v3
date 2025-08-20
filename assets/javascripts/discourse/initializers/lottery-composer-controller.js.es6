@@ -18,13 +18,11 @@ export default {
 
         // 最终的、正确的显示逻辑
         showLotteryForm() {
-          // 处理 lottery_allowed_categories 可能为空的情况
           const allowedCategoriesSetting = siteSettings.lottery_allowed_categories || "";
-          const allowedCategories = allowedCategoriesSetting.split('|').map(Number);
+          const allowedCategories = allowedCategoriesSetting.split('|').map(Number).filter(id => id > 0);
           const currentCategoryId = this.get('model.categoryId');
 
           // 必须是新建主题，且当前分类在允许列表中
-          // 如果允许列表为空，则不显示
           return this.get('model.action') === 'createTopic' && 
                  allowedCategories.length > 0 && 
                  allowedCategories.includes(currentCategoryId);
@@ -73,4 +71,3 @@ export default {
     });
   },
 };
-```    *(我在这里对 `showLotteryForm` 函数做了一个小小的优化，确保在管理员没有设置任何分类时，表单也不会显示，这更加健壮。)*
