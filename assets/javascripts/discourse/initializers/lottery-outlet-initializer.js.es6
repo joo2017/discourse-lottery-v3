@@ -1,47 +1,49 @@
-// file: discourse-lottery-v3/assets/javascripts/discourse/initializers/lottery-outlet-initializer.js.es6
+// file: discourse-lottery-v3/assets/javascripts/discourse/components/lottery-form.js
 
-// 核心修正：从 @ember/string 中导入 htmlSafe，用于安全地渲染组件
-import { htmlSafe } from "@ember/string";
-import { withPluginApi } from "discourse/lib/plugin-api";
-// 核心修正：导入 hbs 模板编译函数
-import { hbs } from "ember-cli-htmlbars";
+import Component from "@glimmer/component";
+import { tracked } from "@glimmer/tracking";
+import { action } from "@ember/object";
+import I18n from "discourse-i18n";
 
-export default {
-  name: "lottery-outlet-initializer",
-  initialize() {
-    withPluginApi("1.0.0", (api) => {
-      // 核心修正：使用最新的 api.renderInOutlet 写法
-      api.renderInOutlet("composer-fields", (outletArgs) => {
-        // outletArgs 就是 composer 的 model，我们可以从中获取 categoryId
-        const model = outletArgs;
-        const siteSettings = api.container.lookup("service:site-settings");
-        
-        if (!siteSettings.lottery_enabled) {
-          return;
-        }
-        
-        const allowedCategoriesSetting = siteSettings.lottery_allowed_categories || "";
-        const allowedCategories = allowedCategoriesSetting.split('|').map(Number).filter(id => id > 0);
-        
-        // 在这里进行最核心的判断
-        if (model.action === "createTopic" && allowedCategories.includes(model.categoryId)) {
-          // 核心修正：返回一个编译好的 hbs 模板，调用我们的组件
-          // `model=model` 是将 composer 的 model 传递给我们的组件
-          return hbs`{{lottery-form model=model}}`;
-        }
-      });
+export default class LotteryForm extends Component {
+  @tracked minParticipantsError = null;
 
-      // 我们仍然需要一个极小化的 modifyClass 来处理保存数据的逻辑
-      api.modifyClass("controller:composer", {
-        pluginId: "discourse-lottery-v3",
-        save(options) {
-          const lotteryData = this.get("model.lotteryFormData");
-          if (lotteryData) {
-            this.get("model").set("custom_fields.lottery", JSON.stringify(lotteryData));
-          }
-          return this._super(options);
-        },
-      });
-    });
-  },
-};
+  // 这是 Glimmer 组件的特性，可以直接在模板中使用，无需 computed
+  backupStrategyOptions = [
+    { id: 'continue', name: I18n.t('lottery.form.backup_strategy.options.continue') },
+    { id: 'cancel', name: I18n.t('lottery.form.backup_strategy.options.cancel') }
+  ];
+
+  constructor() {
+    super(...arguments);
+    // 在 Glimmer 组件中，我们在构造函数里初始化数据
+    // 我们将把表单数据直接存储在 composer model 上
+    this.args.model.lotteryFormData = {};
+  }
+
+  @action
+  updateLotteryData(field, event) {
+    const value = event.target.value;
+    this.args.model.lotteryFormData[field] = value;
+  }
+
+  @action
+  updateLotteryDataComponent(field, value) {
+    // 用于处理非标准 input 元素的组件，如 date-picker 和 combo-box
+    this.args.model.lotteryFormData[field] = value;
+  }
+  
+  @action
+  validateMinParticipants(event) {
+    const value = event.target.value;
+    this.args.model.lotteryFormData['min_participants'] = value;
+    
+    // 从 this.args 中安全地获取 siteSettings
+    const siteSettings = this.args.siteSettings;
+    if (value && parseInt(value, 10) < siteSettings.lottery_min_participants_global) {
+      this.minParticipantsError = I18n.t('lottery.form.min_participants.error', { count: siteSettings.lottery_min_participants_global });
+    } else {
+      this.minParticipantsError = null;
+    }
+  }
+}
