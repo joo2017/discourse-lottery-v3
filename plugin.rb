@@ -8,8 +8,8 @@
 
 enabled_site_setting :lottery_enabled
 
-# 注册 SCSS 样式文件
-register_asset "stylesheets/lottery-form.scss"
+# [临时修正] 我们暂时注释或删除了 register_asset "stylesheets/lottery-form.scss"
+# 因为您已经删除了前端文件，所以我们也必须在这里移除对它的引用，否则编译会失败。
 
 after_initialize do
   # Server-side logic will go here.
