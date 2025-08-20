@@ -1,11 +1,11 @@
-// file: discourse-lottery-v3/assets/javascripts/discourse/components/lottery-form.js (Optimized)
-
 import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
 import I18n from "discourse-i18n";
 
 export default class LotteryForm extends Component {
+  @tracked formData = {};
+
   @tracked minParticipantsError = null;
 
   backupStrategyOptions = [
@@ -15,30 +15,29 @@ export default class LotteryForm extends Component {
 
   constructor() {
     super(...arguments);
-    // [OPTIMIZATION] 增加存在性检查，防止草稿恢复等场景下数据被覆盖
-    if (!this.args.model.lotteryFormData) {
-      this.args.model.lotteryFormData = {};
+    // 初始化时从 model.prefill
+    if (this.args.model.lotteryFormData) {
+      this.formData = { ...this.args.model.lotteryFormData };
     }
   }
 
-  // 用于标准 HTML 输入元素 (input, textarea)
   @action
   updateLotteryData(field, event) {
-    const value = event.target.value;
-    this.args.model.lotteryFormData[field] = value;
+    this.formData = { ...this.formData, [field]: event.target.value }
+    this.args.model.lotteryFormData = { ...this.formData };
   }
 
-  // 用于 Discourse 的 Ember 组件 (DateTimePicker, ComboBox, NumberInput)
   @action
   updateLotteryDataFromComponent(field, value) {
-    this.args.model.lotteryFormData[field] = value;
+    this.formData = { ...this.formData, [field]: value }
+    this.args.model.lotteryFormData = { ...this.formData };
   }
-  
-  // 专门处理参与门槛的验证
+
   @action
   validateMinParticipants(value) {
-    this.args.model.lotteryFormData['min_participants'] = value;
-    
+    this.formData = { ...this.formData, min_participants: value };
+    this.args.model.lotteryFormData = { ...this.formData };
+
     const siteSettings = this.args.siteSettings;
     if (value && parseInt(value, 10) < siteSettings.lottery_min_participants_global) {
       this.minParticipantsError = I18n.t('lottery.form.min_participants.error', { count: siteSettings.lottery_min_participants_global });
