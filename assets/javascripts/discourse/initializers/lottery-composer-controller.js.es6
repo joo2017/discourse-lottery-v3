@@ -5,14 +5,19 @@ import I18n from "discourse-i18n";
 
 export default {
   name: "lottery-composer-controller",
-  initialize(container) {
-    const siteSettings = container.lookup("service:site-settings");
-    
-    if (!siteSettings.lottery_enabled) {
-      return;
-    }
 
+  // 核心修正：使用不带参数的 initialize()，严格遵循官方文档模式
+  initialize() {
     withPluginApi("1.0.0", (api) => {
+
+      // 核心修正：在 withPluginApi 内部安全地获取 siteSettings
+      const siteSettings = api.container.lookup("service:site-settings");
+      
+      // 如果插件总开关是关闭的，则不执行任何操作
+      if (!siteSettings.lottery_enabled) {
+        return;
+      }
+
       api.modifyClass("controller:composer", {
         pluginId: "discourse-lottery-v3",
 
@@ -21,6 +26,7 @@ export default {
           const allowedCategories = allowedCategoriesSetting.split('|').map(Number).filter(id => id > 0);
           const currentCategoryId = this.get('model.categoryId');
 
+          // 逻辑不变：必须是新建主题，且当前分类在允许列表中
           return this.get('model.action') === 'createTopic' && 
                  allowedCategories.length > 0 && 
                  allowedCategories.includes(currentCategoryId);
