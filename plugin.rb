@@ -8,6 +8,9 @@
 
 enabled_site_setting :lottery_enabled
 
+# 注册 SCSS 样式文件
+register_asset "stylesheets/lottery-form.scss"
+
 after_initialize do
-  # All server-side logic will go here.
+  # Server-side logic will go here.
 end
