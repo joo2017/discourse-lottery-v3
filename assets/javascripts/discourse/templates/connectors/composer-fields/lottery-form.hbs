@@ -1,8 +1,7 @@
 <!-- file: discourse-lottery-v3/assets/javascripts/discourse/templates/connectors/composer-fields/lottery-form.hbs -->
 
-{{! 使用 (invoke ...) 来调用函数，确保逻辑正确 }}
 {{#if (invoke controller.showLotteryForm)}}
-  <div class="lottery-form-container">
+  <div class="lottery-form-container" style="border-top: 1px solid #e9e9e9; margin-top: 15px; padding-top: 15px;">
     <div class="control-group">
       <label class="control-label">{{i18n "lottery.form.prize_name.label"}}</label>
       {{input type="text" value=controller.model.lotteryPrizeName required="true" class="d-input"}}
