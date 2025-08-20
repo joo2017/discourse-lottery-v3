@@ -3,34 +3,34 @@
 <div class="lottery-form-container" style="border-top: 1px solid #e9e9e9; margin-top: 15px; padding-top: 15px;">
   <div class="control-group">
     <label class="control-label">{{i18n "lottery.form.prize_name.label"}}</label>
-    {{input type="text" value=(action "updateLotteryData" "prize_name") required="true" class="d-input"}}
+    <Input @type="text" @value={{this.args.model.lotteryFormData.prize_name}} {{on "change" (fn this.updateLotteryData "prize_name")}} required="true" class="d-input" />
   </div>
 
   <div class="control-group">
     <label class="control-label">{{i18n "lottery.form.prize_details.label"}}</label>
-    {{textarea value=(action "updateLotteryData" "prize_details") class="d-textarea"}}
+    <Textarea @value={{this.args.model.lotteryFormData.prize_details}} {{on "change" (fn this.updateLotteryData "prize_details")}} class="d-textarea" />
   </div>
 
   <div class="control-group">
     <label class="control-label">{{i18n "lottery.form.draw_time.label"}}</label>
-    {{date-time-picker value=(action "updateLotteryData" "draw_time")}}
+    <DateTimePicker @value={{this.args.model.lotteryFormData.draw_time}} @onChange={{fn this.updateLotteryDataComponent "draw_time"}} />
   </div>
 
   <div class="control-group">
     <label class="control-label">{{i18n "lottery.form.winners_count.label"}}</label>
-    {{number-input value=(action "updateLotteryData" "winners_count") min="1" required="true"}}
+    <NumberInput @value={{this.args.model.lotteryFormData.winners_count}} @onChange={{fn this.updateLotteryDataComponent "winners_count"}} min="1" required="true" />
     <p class="instructions">{{i18n "lottery.form.winners_count.description"}}</p>
   </div>
 
   <div class="control-group">
     <label class="control-label">{{i18n "lottery.form.specified_posts.label"}}</label>
-    {{input type="text" value=(action "updateLotteryData" "specified_post_numbers") class="d-input"}}
+    <Input @type="text" @value={{this.args.model.lotteryFormData.specified_post_numbers}} {{on "change" (fn this.updateLotteryData "specified_post_numbers")}} class="d-input" />
     <p class="instructions">{{i18n "lottery.form.specified_posts.description"}}</p>
   </div>
 
   <div class="control-group">
     <label class="control-label">{{i18n "lottery.form.min_participants.label"}}</label>
-    {{number-input value=(action "validateMinParticipants") min="1" required="true"}}
+    <NumberInput @value={{this.args.model.lotteryFormData.min_participants}} {{on "change" this.validateMinParticipants}} min="1" required="true" />
     {{#if this.minParticipantsError}}
       <p class="error-message" style="color: red;">{{this.minParticipantsError}}</p>
     {{/if}}
@@ -38,11 +38,12 @@
 
   <div class="control-group">
     <label class="control-label">{{i18n "lottery.form.backup_strategy.label"}}</label>
-    {{combo-box
-      value=(action "updateLotteryData" "backup_strategy")
-      content=this.backupStrategyOptions
-      valueProperty="id"
-      nameProperty="name"
-    }}
+    <ComboBox
+      @value={{this.args.model.lotteryFormData.backup_strategy}}
+      @content={{this.backupStrategyOptions}}
+      @onChange={{fn this.updateLotteryDataComponent "backup_strategy"}}
+      @valueProperty="id"
+      @nameProperty="name"
+    />
   </div>
 </div>
