@@ -1,16 +1,20 @@
 // file: discourse-lottery-v3/assets/javascripts/discourse/initializers/lottery-outlet-initializer.js.es6
 
+// 核心修正：从 @ember/string 中导入 htmlSafe，用于安全地渲染组件
+import { htmlSafe } from "@ember/string";
 import { withPluginApi } from "discourse/lib/plugin-api";
+// 核心修正：导入 hbs 模板编译函数
+import { hbs } from "ember-cli-htmlbars";
 
 export default {
   name: "lottery-outlet-initializer",
   initialize() {
     withPluginApi("1.0.0", (api) => {
-      // 严格遵循官方文档，使用 decoratePluginOutlet 来安全地挂载组件
-      api.decoratePluginOutlet("composer-fields", (helper) => {
-        // outletArgs.model 就是 composer 的 model，我们可以从中获取 categoryId
-        const model = helper.widget.outletArgs.model;
-        const siteSettings = helper.widget.container.lookup("service:site-settings");
+      // 核心修正：使用最新的 api.renderInOutlet 写法
+      api.renderInOutlet("composer-fields", (outletArgs) => {
+        // outletArgs 就是 composer 的 model，我们可以从中获取 categoryId
+        const model = outletArgs;
+        const siteSettings = api.container.lookup("service:site-settings");
         
         if (!siteSettings.lottery_enabled) {
           return;
@@ -21,8 +25,9 @@ export default {
         
         // 在这里进行最核心的判断
         if (model.action === "createTopic" && allowedCategories.includes(model.categoryId)) {
-          // 只有在条件满足时，才渲染我们的组件
-          return helper.attach("lottery-form", { model: model });
+          // 核心修正：返回一个编译好的 hbs 模板，调用我们的组件
+          // `model=model` 是将 composer 的 model 传递给我们的组件
+          return hbs`{{lottery-form model=model}}`;
         }
       });
 
