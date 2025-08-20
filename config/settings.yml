@@ -3,12 +3,18 @@
 plugins:
   lottery_enabled:
     default: true
-    client: false # 此设置仅用于服务器端判断，无需暴露给前端
+    client: true # 前端需要知道插件是否开启
+
+  # 新增：允许抽奖的分类
+  lottery_allowed_categories:
+    default: ""
+    type: category_list
+    client: true # 关键：必须暴露给前端，用于判断是否显示表单
 
   lottery_min_participants_global:
     default: 5
     min: 1
-    client: true # 关键：必须为true，以便前端JS可以获取此值进行实时校验
+    client: true 
 
   lottery_post_lock_delay_minutes:
     default: 30
