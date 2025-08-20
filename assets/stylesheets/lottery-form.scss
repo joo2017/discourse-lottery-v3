@@ -1,0 +1,29 @@
+// file: discourse-lottery-v3/assets/stylesheets/lottery-form.scss
+
+.lottery-form-container {
+  border-top: 1px solid var(--primary-low);
+  margin-top: 15px;
+  padding-top: 15px;
+
+  .control-group {
+    margin-bottom: 15px;
+
+    .control-label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+
+    .instructions {
+      font-size: var(--font-down-1);
+      color: var(--primary-medium);
+      margin-top: 5px;
+    }
+
+    .error-message {
+      color: var(--danger-medium);
+      font-weight: bold;
+      margin-top: 5px;
+    }
+  }
+}
