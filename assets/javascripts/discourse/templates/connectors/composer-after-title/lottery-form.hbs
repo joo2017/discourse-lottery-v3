@@ -1,6 +1,7 @@
 <!-- file: discourse-lottery-v3/assets/javascripts/discourse/templates/connectors/composer-after-title/lottery-form.hbs -->
 
-{{#if controller.showLotteryForm}}
+{{! 采纳建议：使用 (invoke ...) 来调用函数 }}
+{{#if (invoke controller.showLotteryForm)}}
   <div class="lottery-form-container">
     <div class="control-group">
       <label class="control-label">{{i18n "lottery.form.prize_name.label"}}</label>
@@ -33,7 +34,7 @@
       <label class="control-label">{{i18n "lottery.form.min_participants.label"}}</label>
       {{number-input value=controller.model.lotteryMinParticipants min="1" required="true" change=(action "validateMinParticipants")}}
       {{#if controller.minParticipantsError}}
-        <p class="error-message">{{controller.minParticipantsError}}</p>
+        <p class="error-message" style="color: red;">{{controller.minParticipantsError}}</p>
       {{/if}}
     </div>
 
