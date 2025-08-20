@@ -3,50 +3,56 @@
 <div class="lottery-form-container" style="border-top: 1px solid #e9e9e9; margin-top: 15px; padding-top: 15px;">
   <div class="control-group">
     <label class="control-label">{{i18n "lottery.form.prize_name.label"}}</label>
-    <Input @type="text"
-           @value={{this.formData.prize_name}}
-           {{on "input" (fn this.updateLotteryData "prize_name")}}
-           required="true"
-           class="d-input" />
+    <Input 
+      @type="text"
+      @value={{this.formData.prize_name}}
+      {{on "input" (fn this.updateLotteryData "prize_name")}}
+      required="true"
+      class="d-input" />
   </div>
 
   <div class="control-group">
     <label class="control-label">{{i18n "lottery.form.prize_details.label"}}</label>
-    <Textarea @value={{this.formData.prize_details}}
-              {{on "input" (fn this.updateLotteryData "prize_details")}}
-              class="d-textarea" />
+    <Textarea
+      @value={{this.formData.prize_details}}
+      {{on "input" (fn this.updateLotteryData "prize_details")}}
+      class="d-textarea" />
   </div>
 
   <div class="control-group">
     <label class="control-label">{{i18n "lottery.form.draw_time.label"}}</label>
-    <DateTimePicker @value={{this.formData.draw_time}}
-                    @onChange={{fn this.updateLotteryDataFromComponent "draw_time"}} />
+    <DateTimePicker
+      @value={{this.formData.draw_time}}
+      @onChange={{fn this.updateLotteryDataFromComponent "draw_time"}} />
   </div>
 
   <div class="control-group">
     <label class="control-label">{{i18n "lottery.form.winners_count.label"}}</label>
-    <NumberInput @value={{this.formData.winners_count}}
-                 @onChange={{fn this.updateLotteryDataFromComponent "winners_count"}}
-                 min="1"
-                 required="true" />
+    <NumberInput
+      @value={{this.formData.winners_count}}
+      @onChange={{fn this.updateLotteryDataFromComponent "winners_count"}}
+      min="1"
+      required="true" />
     <p class="instructions">{{i18n "lottery.form.winners_count.description"}}</p>
   </div>
 
   <div class="control-group">
     <label class="control-label">{{i18n "lottery.form.specified_posts.label"}}</label>
-    <Input @type="text"
-           @value={{this.formData.specified_post_numbers}}
-           {{on "input" (fn this.updateLotteryData "specified_post_numbers")}}
-           class="d-input" />
+    <Input
+      @type="text"
+      @value={{this.formData.specified_post_numbers}}
+      {{on "input" (fn this.updateLotteryData "specified_post_numbers")}}
+      class="d-input" />
     <p class="instructions">{{i18n "lottery.form.specified_posts.description"}}</p>
   </div>
 
   <div class="control-group">
     <label class="control-label">{{i18n "lottery.form.min_participants.label"}}</label>
-    <NumberInput @value={{this.formData.min_participants}}
-                 @onChange={{this.validateMinParticipants}}
-                 min="1"
-                 required="true" />
+    <NumberInput
+      @value={{this.formData.min_participants}}
+      @onChange={{this.validateMinParticipants}}
+      min="1"
+      required="true" />
     {{#if this.minParticipantsError}}
       <p class="error-message" style="color: red;">{{this.minParticipantsError}}</p>
     {{/if}}
