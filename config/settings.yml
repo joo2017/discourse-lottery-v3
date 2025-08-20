@@ -3,13 +3,12 @@
 plugins:
   lottery_enabled:
     default: true
-    client: true # 前端需要知道插件是否开启
+    client: true
 
-  # 新增：允许抽奖的分类
   lottery_allowed_categories:
     default: ""
     type: category_list
-    client: true # 关键：必须暴露给前端，用于判断是否显示表单
+    client: true
 
   lottery_min_participants_global:
     default: 5
