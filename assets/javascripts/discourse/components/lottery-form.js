@@ -1,3 +1,5 @@
+// file: discourse-lottery-v3/assets/javascripts/discourse/components/lottery-form.js
+
 import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
@@ -10,13 +12,13 @@ export default class LotteryForm extends Component {
     const s = this.args.siteSettings;
     const m = this.args.model;
 
+    // 所有关键对象判空
     if (!s?.lottery_enabled || !m) return false;
     const allowedCats = (s.lottery_allowed_categories || "")
       .split("|")
       .map(Number)
       .filter(Boolean);
 
-    // 必须选定可用分类，并且是新主题
     return (
       m.action === "createTopic" &&
       !!m.categoryId &&
@@ -25,18 +27,19 @@ export default class LotteryForm extends Component {
     );
   }
 
+  // 保证表单数据总是对象，所有字段都有默认值
   get lotteryData() {
-    // 所有表单字段强制初始化，避免 undefined
     const m = this.args.model;
     if (!m.lotteryFormData) m.lotteryFormData = {};
+
     let data = m.lotteryFormData;
-    data.prize_name = data.prize_name || "";
-    data.prize_details = data.prize_details || "";
-    data.draw_time = data.draw_time || null;
-    data.winners_count = data.winners_count ?? 1;
-    data.specified_post_numbers = data.specified_post_numbers || "";
-    data.min_participants = data.min_participants ?? 1;
-    data.backup_strategy = data.backup_strategy || "";
+    if (!("prize_name" in data)) data.prize_name = "";
+    if (!("prize_details" in data)) data.prize_details = "";
+    if (!("draw_time" in data)) data.draw_time = null;
+    if (!("winners_count" in data)) data.winners_count = 1;
+    if (!("specified_post_numbers" in data)) data.specified_post_numbers = "";
+    if (!("min_participants" in data)) data.min_participants = this.args.siteSettings?.lottery_min_participants_global || 1;
+    if (!("backup_strategy" in data)) data.backup_strategy = "continue";
 
     return data;
   }
