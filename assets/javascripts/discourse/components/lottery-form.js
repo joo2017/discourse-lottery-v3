@@ -8,7 +8,7 @@ import I18n from "discourse-i18n";
 export default class LotteryForm extends Component {
   @tracked minParticipantsError = null;
 
-  // [A] 优化 shouldShow 检查，只在完全合法的 context 下显示表单
+  // 严谨的显示判断 getter
   get shouldShow() {
     const s = this.args.siteSettings;
     if (!s?.lottery_enabled) return false;
@@ -19,7 +19,7 @@ export default class LotteryForm extends Component {
       .filter(Boolean);
 
     const m = this.args.model;
-    // 必须所有上下文均已注入
+    // 必须确保所有上下文数据都已准备就绪
     return (
       m &&
       m.action === "createTopic" &&
@@ -36,7 +36,7 @@ export default class LotteryForm extends Component {
 
   constructor() {
     super(...arguments);
-    // [B] 初始化 lotteryFormData 对象所有字段，避免 undefined 错误
+    // 彻底的数据初始化，确保所有绑定到模板的属性都有一个安全的默认值
     if (this.args.model && !this.args.model.lotteryFormData) {
       this.args.model.lotteryFormData = {};
     }
@@ -48,7 +48,8 @@ export default class LotteryForm extends Component {
       data.draw_time = data.draw_time || null;
       data.winners_count = data.winners_count || 1;
       data.specified_post_numbers = data.specified_post_numbers || "";
-      data.min_participants = data.min_participants || site.min_participants_global || 1;
+      // 安全地从 siteSettings 获取默认值
+      data.min_participants = data.min_participants || this.args.siteSettings?.lottery_min_participants_global || 1;
       data.backup_strategy = data.backup_strategy || "continue";
     }
   }
