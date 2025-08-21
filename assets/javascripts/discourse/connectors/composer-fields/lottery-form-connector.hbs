@@ -1,0 +1,5 @@
+{{! file: discourse-lottery-v3/assets/javascripts/discourse/connectors/composer-fields/lottery-form-connector.hbs }}
+
+{{#if controller.shouldShowLotteryForm}}
+  <LotteryForm @model={{this.model}} @siteSettings={{this.siteSettings}} />
+{{/if}}
