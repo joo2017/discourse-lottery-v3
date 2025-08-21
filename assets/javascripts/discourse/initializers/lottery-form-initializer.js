@@ -1,7 +1,5 @@
 // file: discourse-lottery-v3/assets/javascripts/discourse/initializers/lottery-form-initializer.js
-
 import { withPluginApi } from "discourse/lib/plugin-api";
-
 export default {
   name: "lottery-form-initializer",
   initialize() {
