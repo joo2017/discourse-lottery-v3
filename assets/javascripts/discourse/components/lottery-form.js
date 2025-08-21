@@ -8,23 +8,25 @@ import I18n from "discourse-i18n";
 export default class LotteryForm extends Component {
   @tracked minParticipantsError = null;
 
-  // 新增：一个 getter，用于判断组件自身是否应该显示
+  // [A] 优化 shouldShow 检查，只在完全合法的 context 下显示表单
   get shouldShow() {
-    const siteSettings = this.args.siteSettings;
-    if (!siteSettings.lottery_enabled) {
-      return false;
-    }
+    const s = this.args.siteSettings;
+    if (!s?.lottery_enabled) return false;
 
-    const allowedCategoriesSetting = siteSettings.lottery_allowed_categories || "";
-    const allowedCategories = allowedCategoriesSetting.split('|').map(Number).filter(id => id > 0);
-    
-    // 使用可选链操作符 ?. 来安全地访问属性，防止 model 不存在时报错
-    const composerAction = this.args.model?.action;
-    const currentCategoryId = this.args.model?.categoryId;
+    const allowedCats = (s.lottery_allowed_categories || "")
+      .split("|")
+      .map(Number)
+      .filter(Boolean);
 
-    return composerAction === 'createTopic' &&
-           allowedCategories.length > 0 &&
-           allowedCategories.includes(currentCategoryId);
+    const m = this.args.model;
+    // 必须所有上下文均已注入
+    return (
+      m &&
+      m.action === "createTopic" &&
+      m.categoryId &&
+      allowedCats.length > 0 &&
+      allowedCats.includes(m.categoryId)
+    );
   }
 
   backupStrategyOptions = [
@@ -34,9 +36,20 @@ export default class LotteryForm extends Component {
 
   constructor() {
     super(...arguments);
-    // 只有在 model 存在时才初始化数据
+    // [B] 初始化 lotteryFormData 对象所有字段，避免 undefined 错误
     if (this.args.model && !this.args.model.lotteryFormData) {
       this.args.model.lotteryFormData = {};
+    }
+    
+    const data = this.args.model?.lotteryFormData;
+    if (data) {
+      data.prize_name = data.prize_name || "";
+      data.prize_details = data.prize_details || "";
+      data.draw_time = data.draw_time || null;
+      data.winners_count = data.winners_count || 1;
+      data.specified_post_numbers = data.specified_post_numbers || "";
+      data.min_participants = data.min_participants || site.min_participants_global || 1;
+      data.backup_strategy = data.backup_strategy || "continue";
     }
   }
 
