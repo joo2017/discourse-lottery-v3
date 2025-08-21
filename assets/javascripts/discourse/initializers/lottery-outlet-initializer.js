@@ -1,32 +1,33 @@
 // file: discourse-lottery-v3/assets/javascripts/discourse/initializers/lottery-outlet-initializer.js
 
 import { withPluginApi } from "discourse/lib/plugin-api";
+import { hbs } from "ember-cli-htmlbars";
 
 export default {
   name: "lottery-outlet-initializer",
-  initialize() {
+  initialize(container) {
     withPluginApi("1.0.0", (api) => {
-      // 使用被广泛支持且稳定的 decoratePluginOutlet
-      api.decoratePluginOutlet("composer-fields", (helper) => {
-        const model = helper.widget.outletArgs.model;
-        const siteSettings = helper.widget.container.lookup("service:site-settings");
+      // 使用最新的、官方推荐的 renderInOutlet API
+      api.renderInOutlet('composer-fields', outletArgs => {
+        const siteSettings = container.lookup('service:site-settings');
         
-        if (!siteSettings.lottery_enabled) {
-          return;
-        }
-        
+        if (!siteSettings.lottery_enabled) { return; }
+
         const allowedCategoriesSetting = siteSettings.lottery_allowed_categories || "";
         const allowedCategories = allowedCategoriesSetting.split('|').map(Number).filter(id => id > 0);
         
-        if (model.action === "createTopic" && allowedCategories.includes(model.categoryId)) {
-          return helper.attach("lottery-form", { 
-              model: model, 
-              siteSettings: siteSettings
-          });
+        // outletArgs 直接就是 composer model
+        const model = outletArgs;
+
+        // 核心判断逻辑
+        if (model.action === 'createTopic' && allowedCategories.includes(model.categoryId)) {
+          // 直接返回一个 hbs 模板，调用我们的组件
+          // 这种方式不会破坏编辑器，因为它是由 Discourse 的渲染引擎安全处理的
+          return hbs`<LotteryForm @model={{model}} @siteSettings={{siteSettings}} />`;
         }
       });
 
-      // 只保留绝对必要的 save 方法修改
+      // 保留最小化的 save 方法修改
       api.modifyClass("controller:composer", {
         pluginId: "discourse-lottery-v3",
         save(options) {
