@@ -1,67 +1,77 @@
-import Component from "@glimmer/component";
-import { tracked } from "@glimmer/tracking";
-import { action } from "@ember/object";
-import I18n from "discourse-i18n";
+{{#if this.shouldShow}}
+  <div class="lottery-form-container">
+    <div class="control-group">
+      <label class="control-label">{{i18n "lottery.form.prize_name.label"}}</label>
+      <Input
+        @type="text"
+        @value={{this.lotteryData.prize_name}}
+        {{on "input" (fn this.updateLotteryData "prize_name")}}
+        required="true"
+        class="d-input"
+      />
+    </div>
 
-export default class LotteryForm extends Component {
-  @tracked minParticipantsError = null;
+    <div class="control-group">
+      <label class="control-label">{{i18n "lottery.form.prize_details.label"}}</label>
+      <Textarea
+        @value={{this.lotteryData.prize_details}}
+        {{on "input" (fn this.updateLotteryData "prize_details")}}
+        class="d-textarea"
+      />
+    </div>
 
-  get shouldShow() {
-    const s = this.args.siteSettings;
-    const m = this.args.model;
+    <div class="control-group">
+      <label class="control-label">{{i18n "lottery.form.draw_time.label"}}</label>
+      <DateTimePicker
+        @value={{this.lotteryData.draw_time}}
+        @onChange={{fn this.updateLotteryDataFromComponent "draw_time"}}
+      />
+    </div>
 
-    if (!s?.lottery_enabled || !m) return false;
-    const allowedCats = (s.lottery_allowed_categories || "")
-      .split("|")
-      .map(Number)
-      .filter(Boolean);
+    <div class="control-group">
+      <label class="control-label">{{i18n "lottery.form.winners_count.label"}}</label>
+      <NumberInput
+        @value={{this.lotteryData.winners_count}}
+        @onChange={{fn this.updateLotteryDataFromComponent "winners_count"}}
+        min="1"
+        required="true"
+      />
+      <p class="instructions">{{i18n "lottery.form.winners_count.description"}}</p>
+    </div>
 
-    return (
-      m.action === "createTopic" &&
-      !!m.categoryId &&
-      allowedCats.length > 0 &&
-      allowedCats.includes(m.categoryId)
-    );
-  }
+    <div class="control-group">
+      <label class="control-label">{{i18n "lottery.form.specified_posts.label"}}</label>
+      <Input
+        @type="text"
+        @value={{this.lotteryData.specified_post_numbers}}
+        {{on "input" (fn this.updateLotteryData "specified_post_numbers")}}
+        class="d-input"
+      />
+      <p class="instructions">{{i18n "lottery.form.specified_posts.description"}}</p>
+    </div>
 
-  get lotteryData() {
-    const m = this.args.model;
-    if (!m.lotteryFormData) m.lotteryFormData = {};
-    let data = m.lotteryFormData;
-    data.prize_name = data.prize_name || "";
-    data.prize_details = data.prize_details || "";
-    data.draw_time = data.draw_time || null;
-    data.winners_count = data.winners_count ?? 1;
-    data.specified_post_numbers = data.specified_post_numbers || "";
-    data.min_participants = data.min_participants ?? (this.args.siteSettings.lottery_min_participants_global || 1);
-    data.backup_strategy = data.backup_strategy || "continue";
+    <div class="control-group">
+      <label class="control-label">{{i18n "lottery.form.min_participants.label"}}</label>
+      <NumberInput
+        @value={{this.lotteryData.min_participants}}
+        @onChange={{this.validateMinParticipants}}
+        min="1"
+        required="true"
+      />
+      {{#if this.minParticipantsError}}
+        <p class="error-message">{{this.minParticipantsError}}</p>
+      {{/if}}
+    </div>
 
-    return data;
-  }
-
-  backupStrategyOptions = [
-    { id: "continue", name: I18n.t("lottery.form.backup_strategy.options.continue") },
-    { id: "cancel", name: I18n.t("lottery.form.backup_strategy.options.cancel") }
-  ];
-
-  @action
-  updateLotteryData(field, event) {
-    this.lotteryData[field] = event.target.value;
-  }
-
-  @action
-  updateLotteryDataFromComponent(field, value) {
-    this.lotteryData[field] = value;
-  }
-
-  @action
-  validateMinParticipants(value) {
-    const s = this.args.siteSettings;
-    this.lotteryData["min_participants"] = value;
-    if (value && parseInt(value, 10) < (s.lottery_min_participants_global || 1)) {
-      this.minParticipantsError = I18n.t("lottery.form.min_participants.error", { count: s.lottery_min_participants_global || 1 });
-    } else {
-      this.minParticipantsError = null;
-    }
-  }
-}
+    <div class="control-group">
+      <label class="control-label">{{i18n "lottery.form.backup_strategy.label"}}</label>
+      <ComboBox
+        @value={{this.lotteryData.backup_strategy}}
+        @content={{this.backupStrategyOptions}}
+        @onChange={{fn this.updateLotteryDataFromComponent "backup_strategy"}}
+        @valueProperty="id"
+        @nameProperty="name"
+      />
+    </div>
+  </div>
+{{/if}}
