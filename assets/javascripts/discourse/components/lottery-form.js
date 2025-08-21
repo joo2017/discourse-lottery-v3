@@ -1,5 +1,3 @@
-// file: discourse-lottery-v3/assets/javascripts/discourse/components/lottery-form.js
-
 import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
@@ -18,6 +16,7 @@ export default class LotteryForm extends Component {
       .map(Number)
       .filter(Boolean);
 
+    // 必须选定可用分类，并且是新主题
     return (
       m.action === "createTopic" &&
       !!m.categoryId &&
@@ -27,6 +26,7 @@ export default class LotteryForm extends Component {
   }
 
   get lotteryData() {
+    // 所有表单字段强制初始化，避免 undefined
     const m = this.args.model;
     if (!m.lotteryFormData) m.lotteryFormData = {};
     let data = m.lotteryFormData;
@@ -35,9 +35,8 @@ export default class LotteryForm extends Component {
     data.draw_time = data.draw_time || null;
     data.winners_count = data.winners_count ?? 1;
     data.specified_post_numbers = data.specified_post_numbers || "";
-    // [核心修正] 移除对 this.args.siteSettings 的依赖，提供一个绝对安全的默认值
     data.min_participants = data.min_participants ?? 1;
-    data.backup_strategy = data.backup_strategy || "continue";
+    data.backup_strategy = data.backup_strategy || "";
 
     return data;
   }
@@ -61,7 +60,6 @@ export default class LotteryForm extends Component {
   validateMinParticipants(value) {
     const s = this.args.siteSettings;
     this.lotteryData["min_participants"] = value;
-    // 在这里安全地访问 siteSettings 进行验证
     if (value && parseInt(value, 10) < (s.lottery_min_participants_global || 1)) {
       this.minParticipantsError = I18n.t("lottery.form.min_participants.error", { count: s.lottery_min_participants_global || 1 });
     } else {
