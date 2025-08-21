@@ -1,29 +1,35 @@
 // file: discourse-lottery-v3/assets/javascripts/discourse/initializers/lottery-outlet-initializer.js
 
 import { withPluginApi } from "discourse/lib/plugin-api";
-import { hbs } from "ember-cli-htmlbars";
+import LotteryForm from "../components/lottery-form"; // 核心修正：直接导入组件
 
 export default {
   name: "lottery-outlet-initializer",
-  initialize(container) {
+  initialize() {
     withPluginApi("1.0.0", (api) => {
-      // 使用最新的、官方推荐的 renderInOutlet API
-      api.renderInOutlet('composer-fields', outletArgs => {
-        const siteSettings = container.lookup('service:site-settings');
+      // 核心修正：这是解决“弃用警告”的、最现代且安全的方式
+      api.registerOutletComponent("composer-fields", {
+        // 将组件直接在这里注册
+        component: LotteryForm, 
         
-        if (!siteSettings.lottery_enabled) { return; }
+        // 在这里编写判断逻辑
+        shouldRender(outletArgs, component) {
+          const siteSettings = component.siteSettings;
+          if (!siteSettings.lottery_enabled) { return false; }
 
-        const allowedCategoriesSetting = siteSettings.lottery_allowed_categories || "";
-        const allowedCategories = allowedCategoriesSetting.split('|').map(Number).filter(id => id > 0);
-        
-        // outletArgs 直接就是 composer model
-        const model = outletArgs;
+          const allowedCategoriesSetting = siteSettings.lottery_allowed_categories || "";
+          const allowedCategories = allowedCategoriesSetting.split('|').map(Number).filter(id => id > 0);
+          const model = outletArgs;
 
-        // 核心判断逻辑
-        if (model.action === 'createTopic' && allowedCategories.includes(model.categoryId)) {
-          // 直接返回一个 hbs 模板，调用我们的组件
-          // 这种方式不会破坏编辑器，因为它是由 Discourse 的渲染引擎安全处理的
-          return hbs`<LotteryForm @model={{model}} @siteSettings={{siteSettings}} />`;
+          return model.action === 'createTopic' && allowedCategories.includes(model.categoryId);
+        },
+
+        // 传递给组件的参数
+        args(outletArgs, component) {
+          return {
+            model: outletArgs,
+            siteSettings: component.siteSettings,
+          };
         }
       });
 
