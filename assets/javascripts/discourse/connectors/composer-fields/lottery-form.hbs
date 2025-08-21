@@ -1,1 +1,3 @@
-<LotteryForm />
+{{#if this.canShowLotteryForm}}
+  <LotteryForm @topic={{this.topic}} />
+{{/if}}
