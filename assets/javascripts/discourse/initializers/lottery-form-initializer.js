@@ -1,5 +1,3 @@
-// file: discourse-lottery-v3/assets/javascripts/discourse/initializers/lottery-form-initializer.js
-
 import { withPluginApi } from "discourse/lib/plugin-api";
 
 export default {
@@ -8,8 +6,8 @@ export default {
     withPluginApi("1.0.0", (api) => {
       api.modifyClass("controller:composer", {
         pluginId: "discourse-lottery-v3",
-        
-        // 渲染逻辑被完全移除，只留下数据保存的钩子
+
+        // 只负责保存自定义表单数据
         save(options) {
           const lotteryData = this.get("model.lotteryFormData");
           if (lotteryData) {
