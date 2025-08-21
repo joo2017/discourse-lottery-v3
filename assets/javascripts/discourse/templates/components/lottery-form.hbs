@@ -1,0 +1,43 @@
+{{! file: discourse-lottery-v3/assets/javascripts/discourse/templates/components/lottery-form.hbs }}
+
+<div class="lottery-form-container">
+  <div class="control-group">
+    <label class="control-label">{{i18n "lottery.form.prize_name.label"}}</label>
+    <Input @type="text" @value={{this.args.model.lotteryFormData.prize_name}} {{on "input" (fn this.updateLotteryData "prize_name")}} required="true" class="d-input" />
+  </div>
+  <div class="control-group">
+    <label class="control-label">{{i18n "lottery.form.prize_details.label"}}</label>
+    <Textarea @value={{this.args.model.lotteryFormData.prize_details}} {{on "input" (fn this.updateLotteryData "prize_details")}} class="d-textarea" />
+  </div>
+  <div class="control-group">
+    <label class="control-label">{{i18n "lottery.form.draw_time.label"}}</label>
+    <DateTimePicker @value={{this.args.model.lotteryFormData.draw_time}} @onChange={{fn this.updateLotteryDataFromComponent "draw_time"}} />
+  </div>
+  <div class="control-group">
+    <label class="control-label">{{i18n "lottery.form.winners_count.label"}}</label>
+    <NumberInput @value={{this.args.model.lotteryFormData.winners_count}} @onChange={{fn this.updateLotteryDataFromComponent "winners_count"}} min="1" required="true" />
+    <p class="instructions">{{i18n "lottery.form.winners_count.description"}}</p>
+  </div>
+  <div class="control-group">
+    <label class="control-label">{{i18n "lottery.form.specified_posts.label"}}</label>
+    <Input @type="text" @value={{this.args.model.lotteryFormData.specified_post_numbers}} {{on "input" (fn this.updateLotteryData "specified_post_numbers")}} class="d-input" />
+    <p class="instructions">{{i18n "lottery.form.specified_posts.description"}}</p>
+  </div>
+  <div class="control-group">
+    <label class="control-label">{{i18n "lottery.form.min_participants.label"}}</label>
+    <NumberInput @value={{this.args.model.lotteryFormData.min_participants}} @onChange={{this.validateMinParticipants}} min="1" required="true" />
+    {{#if this.minParticipantsError}}
+      <p class="error-message">{{this.minParticipantsError}}</p>
+    {{/if}}
+  </div>
+  <div class="control-group">
+    <label class="control-label">{{i18n "lottery.form.backup_strategy.label"}}</label>
+    <ComboBox
+      @value={{this.args.model.lotteryFormData.backup_strategy}}
+      @content={{this.backupStrategyOptions}}
+      @onChange={{fn this.updateLotteryDataFromComponent "backup_strategy"}}
+      @valueProperty="id"
+      @nameProperty="name"
+    />
+  </div>
+</div>
