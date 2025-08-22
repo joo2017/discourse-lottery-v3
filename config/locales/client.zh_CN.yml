@@ -1,0 +1,17 @@
+zh_CN:
+  js:
+    composer:
+      lottery_insert: "插入抽奖"
+    
+    lottery:
+      toolbar:
+        insert_lottery: "插入抽奖"
+        activity_name: "请输入活动名称："
+        prize_details: "请输入奖品说明："
+        draw_time: "请输入开奖时间 (格式: 2025-08-24T20:00)："
+        
+      errors:
+        missing_activity_name: "活动名称不能为空"
+        missing_prize_details: "奖品说明不能为空"
+        missing_draw_time: "开奖时间不能为空"
+        invalid_time_format: "时间格式无效"
