@@ -3,80 +3,68 @@ import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
 import { inject as service } from "@ember/service";
 
-export default class LotterySettings extends Component {
+export default class LotterySettingsModal extends Component {
   @service siteSettings;
-  
-  // 表单数据
+  @service modal;
+
   @tracked prizeName = "";
   @tracked prizeDetails = "";
   @tracked drawTime = "";
   @tracked winnersCount = 1;
   @tracked specifiedPosts = "";
-  @tracked minParticipants = 5;
+  @tracked minParticipants = 10;
   @tracked backupStrategy = "continue";
   @tracked additionalNotes = "";
-
-  // 验证状态
   @tracked errors = {};
 
   constructor() {
     super(...arguments);
-    // 初始化最小参与人数
-    this.minParticipants = this.siteSettings.lottery_min_participants_global || 5;
+    this.minParticipants = this.siteSettings.lottery_min_participants_global || 10;
+    console.log("🎲 LotterySettingsModal initialized");
   }
 
-  // 获取全局最小参与人数
   get globalMinParticipants() {
-    return this.siteSettings.lottery_min_participants_global || 5;
+    return this.siteSettings.lottery_min_participants_global || 10;
   }
 
-  // 检查表单是否有效
   get isFormValid() {
     return (
       this.prizeName.trim().length > 0 &&
       this.prizeDetails.trim().length > 0 &&
       this.drawTime.length > 0 &&
       this.winnersCount > 0 &&
-      this.minParticipants >= this.globalMinParticipants &&
-      Object.keys(this.errors).length === 0
+      this.minParticipants >= this.globalMinParticipants
     );
   }
 
   @action
   updatePrizeName(event) {
     this.prizeName = event.target.value;
-    this.validateRequired("prizeName", this.prizeName, "活动名称");
   }
 
   @action
   updatePrizeDetails(event) {
     this.prizeDetails = event.target.value;
-    this.validateRequired("prizeDetails", this.prizeDetails, "奖品说明");
   }
 
   @action
   updateDrawTime(event) {
     this.drawTime = event.target.value;
-    this.validateRequired("drawTime", this.drawTime, "开奖时间");
-    this.validateDrawTime();
   }
 
   @action
   updateWinnersCount(event) {
     this.winnersCount = parseInt(event.target.value) || 1;
-    this.validateWinnersCount();
   }
 
   @action
   updateSpecifiedPosts(event) {
     this.specifiedPosts = event.target.value;
-    this.validateSpecifiedPosts();
   }
 
   @action
   updateMinParticipants(event) {
     this.minParticipants = parseInt(event.target.value) || 1;
-    this.validateMinParticipants();
   }
 
   @action
@@ -92,12 +80,12 @@ export default class LotterySettings extends Component {
   @action
   confirmLottery() {
     if (!this.isFormValid) {
+      console.log("🎲 Form validation failed");
       return;
     }
 
-    console.log("🎲 Confirming lottery creation");
-    
-    // 构建抽奖数据
+    console.log("🎲 Creating lottery");
+
     const lotteryData = {
       prize_name: this.prizeName,
       prize_details: this.prizeDetails,
@@ -109,95 +97,25 @@ export default class LotterySettings extends Component {
       additional_notes: this.additionalNotes
     };
 
-    console.log("🎲 Lottery data:", lotteryData);
-
-    // 保存到全局变量，供发布时使用
+    // 保存到全局变量
     window.lotteryFormDataCache = lotteryData;
 
-    // 在编辑器中插入抽奖占位符
-    const placeholder = `\n\n[lottery]\n活动名称：${this.prizeName}\n奖品说明：${this.prizeDetails}\n开奖时间：${this.drawTime}\n[/lottery]\n\n`;
-    
+    // 获取 composer 并插入内容
     const composer = this.args.model.composer;
-    const currentText = composer.get("model.reply") || "";
-    composer.set("model.reply", currentText + placeholder);
+    if (composer) {
+      const placeholder = `\n\n[lottery]\n活动名称: ${this.prizeName}\n奖品说明: ${this.prizeDetails}\n开奖时间: ${this.drawTime}\n获奖人数: ${this.winnersCount}\n参与门槛: ${this.minParticipants}人\n[/lottery]\n\n`;
+      const currentText = composer.get("model.reply") || "";
+      composer.set("model.reply", currentText + placeholder);
+    }
 
-    console.log("🎲 Inserted lottery placeholder into composer");
+    console.log("🎲 Lottery data saved and inserted");
 
-    // 关闭对话框
-    this.args.closeModal();
+    // 关闭模态框
+    this.modal.close();
   }
 
   @action
   cancelLottery() {
-    this.args.closeModal();
-  }
-
-  // 验证方法（简化版本）
-  validateRequired(field, value, label) {
-    if (!value || value.trim().length === 0) {
-      this.errors = { ...this.errors, [field]: `${label}不能为空` };
-    } else {
-      const newErrors = { ...this.errors };
-      delete newErrors[field];
-      this.errors = newErrors;
-    }
-  }
-
-  validateDrawTime() {
-    if (!this.drawTime) return;
-    
-    const drawDate = new Date(this.drawTime);
-    const now = new Date();
-    
-    if (drawDate <= now) {
-      this.errors = { ...this.errors, drawTime: "开奖时间必须是未来时间" };
-    } else {
-      const newErrors = { ...this.errors };
-      delete newErrors.drawTime;
-      this.errors = newErrors;
-    }
-  }
-
-  validateWinnersCount() {
-    if (this.winnersCount < 1) {
-      this.errors = { ...this.errors, winnersCount: "获奖人数不能少于1" };
-    } else {
-      const newErrors = { ...this.errors };
-      delete newErrors.winnersCount;
-      this.errors = newErrors;
-    }
-  }
-
-  validateSpecifiedPosts() {
-    if (!this.specifiedPosts.trim()) {
-      const newErrors = { ...this.errors };
-      delete newErrors.specifiedPosts;
-      this.errors = newErrors;
-      return;
-    }
-
-    const posts = this.specifiedPosts.split(",").map(s => s.trim()).filter(s => s);
-    const invalidPosts = posts.filter(post => {
-      const num = parseInt(post);
-      return isNaN(num) || num < 2;
-    });
-
-    if (invalidPosts.length > 0) {
-      this.errors = { ...this.errors, specifiedPosts: `无效的楼层号: ${invalidPosts.join(", ")}` };
-    } else {
-      const newErrors = { ...this.errors };
-      delete newErrors.specifiedPosts;
-      this.errors = newErrors;
-    }
-  }
-
-  validateMinParticipants() {
-    if (this.minParticipants < this.globalMinParticipants) {
-      this.errors = { ...this.errors, minParticipants: `参与门槛不能低于${this.globalMinParticipants}人` };
-    } else {
-      const newErrors = { ...this.errors };
-      delete newErrors.minParticipants;
-      this.errors = newErrors;
-    }
+    this.modal.close();
   }
 }
