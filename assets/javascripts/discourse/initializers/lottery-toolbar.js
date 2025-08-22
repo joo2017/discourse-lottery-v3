@@ -107,15 +107,12 @@ export default {
           group: "extras",
           icon: "dice",
           title: "插入抽奖",
+          className: "lottery-toolbar-btn",
           perform: () => {
             console.log("🎲 Lottery button clicked");
             insertLottery();
-          },
-          condition: () => {
-            const canInsert = canInsertLottery();
-            console.log("🎲 Button condition check result:", canInsert);
-            return canInsert;
           }
+          // 移除 condition，让按钮始终显示，在点击时检查权限
         });
         
         console.log("🎲 Lottery button added to toolbar");
