@@ -4,13 +4,20 @@
 # authors: [Your Name]
 # url: [Your GitHub Repo URL]
 
-enabled_site_setting :lottery_enabled
+# name: discourse-lottery-v3
+# about: A comprehensive and robust lottery plugin for Discourse, based on the V3 blueprint.
+# version: 0.1
+# authors: [Your Name]
+# url: [Your GitHub Repo URL]
 
-# 注册 custom fields
-register_topic_custom_field_type('lottery', :json)
+enabled_site_setting :lottery_enabled
 
 after_initialize do
   Rails.logger.info "LotteryPlugin: Starting initialization"
+  
+  # 临时跳过 custom field 注册，直接处理字符串
+  # register_topic_custom_field_type('lottery', :json)
+  # Rails.logger.info "LotteryPlugin: Registered lottery custom field"
   
   # 加载模型和服务
   begin
