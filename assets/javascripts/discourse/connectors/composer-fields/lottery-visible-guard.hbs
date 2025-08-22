@@ -1,27 +1,3 @@
-<div style="background: yellow; padding: 10px; border: 2px solid red; margin: 10px;">
-  <h3>🎲 LOTTERY GUARD SUPER DEBUG</h3>
-  <p><strong>Guard is rendering!</strong></p>
-  <p>🎯 Can show form: <strong>{{this.canShowLotteryForm}}</strong></p>
-  <p>🎯 Current Category ID: <strong>{{this.currentCategoryId}}</strong></p>
-  <p>🎯 Allowed Category IDs: <strong>{{this.allowedCategoryIds}}</strong></p>
-  <p>🎯 Site Settings Lottery Enabled: <strong>{{this.siteSettings.lottery_enabled}}</strong></p>
-  <p>🎯 Site Settings Allowed Categories: <strong>{{this.siteSettings.lottery_allowed_categories}}</strong></p>
-  
-  <div style="margin-top: 10px; padding: 5px; background: #f0f0f0;">
-    <strong>Debug Info:</strong><br>
-    Args: {{this.args}}<br>
-    Composer: {{this.composer}}<br>
-  </div>
-</div>
-
 {{#if this.canShowLotteryForm}}
-  <div style="background: green; color: white; padding: 10px;">
-    <h4>✅ SHOWING LOTTERY FORM</h4>
-    <LotteryForm @topic={{@topic}} />
-  </div>
-{{else}}
-  <div style="background: red; color: white; padding: 10px;">
-    <h4>❌ HIDING LOTTERY FORM</h4>
-    <p>Reason: Current category ({{this.currentCategoryId}}) is not in allowed list ({{this.allowedCategoryIds}})</p>
-  </div>
+  <LotteryForm @topic={{@topic}} />
 {{/if}}
