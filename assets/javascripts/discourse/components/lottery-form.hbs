@@ -12,7 +12,7 @@
       <label class="field-label required">活动名称 *</label>
       <input 
         type="text" 
-        class="lottery-input {{if this.errors.prizeName 'error'}}"
+        class="lottery-input"
         value={{this.prizeName}}
         placeholder="请输入活动名称"
         {{on "input" this.updatePrizeName}}
@@ -26,7 +26,7 @@
     <div class="field-group">
       <label class="field-label required">奖品说明 *</label>
       <textarea 
-        class="lottery-textarea {{if this.errors.prizeDetails 'error'}}"
+        class="lottery-textarea"
         value={{this.prizeDetails}}
         rows="3"
         placeholder="请详细描述奖品内容"
@@ -42,7 +42,7 @@
       <label class="field-label required">开奖时间 *</label>
       <input 
         type="datetime-local" 
-        class="lottery-input {{if this.errors.drawTime 'error'}}"
+        class="lottery-input"
         value={{this.drawTime}}
         {{on "input" this.updateDrawTime}}
       />
@@ -56,7 +56,7 @@
       <label class="field-label required">获奖人数 *</label>
       <input 
         type="number" 
-        class="lottery-input {{if this.errors.winnersCount 'error'}}"
+        class="lottery-input"
         value={{this.winnersCount}}
         min="1"
         {{on "input" this.updateWinnersCount}}
@@ -72,7 +72,7 @@
       <label class="field-label">指定中奖楼层（可选）</label>
       <input 
         type="text" 
-        class="lottery-input {{if this.errors.specifiedPosts 'error'}}"
+        class="lottery-input"
         value={{this.specifiedPosts}}
         placeholder="例如：8, 18, 28"
         {{on "input" this.updateSpecifiedPosts}}
@@ -88,7 +88,7 @@
       <label class="field-label required">参与门槛 *</label>
       <input 
         type="number" 
-        class="lottery-input {{if this.errors.minParticipants 'error'}}"
+        class="lottery-input"
         value={{this.minParticipants}}
         min={{this.globalMinParticipants}}
         {{on "input" this.updateMinParticipants}}
@@ -106,14 +106,12 @@
         class="lottery-select"
         {{on "change" this.updateBackupStrategy}}
       >
-        {{#each this.backupStrategyOptions as |option|}}
-          <option 
-            value={{option.value}} 
-            selected={{eq this.backupStrategy option.value}}
-          >
-            {{option.label}}
-          </option>
-        {{/each}}
+        <option value="continue" selected={{eq this.backupStrategy "continue"}}>
+          当开奖时人数不足，继续开奖
+        </option>
+        <option value="cancel" selected={{eq this.backupStrategy "cancel"}}>
+          当开奖时人数不足，取消活动
+        </option>
       </select>
     </div>
 
@@ -134,116 +132,12 @@
   <div class="lottery-form-footer">
     {{#unless this.isFormValid}}
       <div class="form-status error">
-        <i class="fa fa-exclamation-triangle"></i>
         请完成所有必填项并修正错误后再提交
       </div>
     {{else}}
       <div class="form-status success">
-        <i class="fa fa-check-circle"></i>
         表单填写完整，可以提交
       </div>
     {{/unless}}
   </div>
 </div>
-
-<style>
-.lottery-form {
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 8px;
-  padding: 20px;
-  margin: 15px 0;
-}
-
-.lottery-form-header h3 {
-  color: #495057;
-  margin: 0 0 10px 0;
-  font-size: 18px;
-}
-
-.lottery-form-description {
-  color: #6c757d;
-  margin: 0 0 20px 0;
-  font-size: 14px;
-}
-
-.field-group {
-  margin-bottom: 16px;
-}
-
-.field-label {
-  display: block;
-  font-weight: 500;
-  color: #495057;
-  margin-bottom: 5px;
-  font-size: 14px;
-}
-
-.field-label.required::after {
-  content: " *";
-  color: #dc3545;
-}
-
-.lottery-input, .lottery-textarea, .lottery-select {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  font-size: 14px;
-  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-}
-
-.lottery-input:focus, .lottery-textarea:focus, .lottery-select:focus {
-  outline: 0;
-  border-color: #80bdff;
-  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-}
-
-.lottery-input.error, .lottery-textarea.error {
-  border-color: #dc3545;
-}
-
-.field-help {
-  font-size: 12px;
-  color: #6c757d;
-  margin-top: 5px;
-}
-
-.field-error {
-  font-size: 12px;
-  color: #dc3545;
-  margin-top: 5px;
-}
-
-.lottery-form-footer {
-  margin-top: 20px;
-  padding-top: 15px;
-  border-top: 1px solid #dee2e6;
-}
-
-.form-status {
-  padding: 10px 12px;
-  border-radius: 4px;
-  font-size: 14px;
-}
-
-.form-status.error {
-  background-color: #f8d7da;
-  color: #721c24;
-  border: 1px solid #f5c6cb;
-}
-
-.form-status.success {
-  background-color: #d4edda;
-  color: #155724;
-  border: 1px solid #c3e6cb;
-}
-
-.form-status i {
-  margin-right: 8px;
-}
-
-.required {
-  color: #dc3545;
-}
-</style>
