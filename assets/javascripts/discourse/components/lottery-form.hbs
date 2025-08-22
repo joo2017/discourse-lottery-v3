@@ -1,1 +1,13 @@
-Hello World Glimmer!
+<div class="lottery-form-debug" style="border: 2px solid red; padding: 10px; margin: 10px; background: #ffe6e6;">
+  <h3>🎲 Lottery Form Debug Info</h3>
+  <p><strong>Form is rendering!</strong></p>
+  <p>Global Min Participants: {{this.globalMinParticipants}}</p>
+  <p>Message: {{this.msg}}</p>
+  <input type="text" value={{this.msg}} {{on "input" this.setMsg}} placeholder="Test input" />
+</div>
+
+<div class="lottery-form-container">
+  <h3>抽奖表单</h3>
+  <p>Hello World Glimmer!</p>
+  <p>Current message: {{this.msg}}</p>
+</div>
