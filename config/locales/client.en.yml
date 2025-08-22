@@ -1,6 +1,7 @@
-# file: discourse-lottery-v3/config/locales/client.en.yml
 en:
   lottery:
+    toolbar:
+      title: "Insert Lottery"
     form:
       prize_name:
         label: "Activity Name"
