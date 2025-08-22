@@ -23,6 +23,11 @@ export default class LotteryForm extends Component {
     super(...arguments);
     // 初始化最小参与人数
     this.minParticipants = this.siteSettings.lottery_min_participants_global || 5;
+    
+    console.log("🎲 LotteryForm constructor called");
+    
+    // 将组件注册到全局，以便 composer 能找到
+    window.currentLotteryForm = this;
   }
 
   // 获取全局最小参与人数
@@ -46,12 +51,14 @@ export default class LotteryForm extends Component {
   updatePrizeName(event) {
     this.prizeName = event.target.value;
     this.validateRequired("prizeName", this.prizeName, "活动名称");
+    console.log("🎲 Prize name updated:", this.prizeName);
   }
 
   @action
   updatePrizeDetails(event) {
     this.prizeDetails = event.target.value;
     this.validateRequired("prizeDetails", this.prizeDetails, "奖品说明");
+    console.log("🎲 Prize details updated:", this.prizeDetails);
   }
 
   @action
@@ -59,34 +66,40 @@ export default class LotteryForm extends Component {
     this.drawTime = event.target.value;
     this.validateRequired("drawTime", this.drawTime, "开奖时间");
     this.validateDrawTime();
+    console.log("🎲 Draw time updated:", this.drawTime);
   }
 
   @action
   updateWinnersCount(event) {
     this.winnersCount = parseInt(event.target.value) || 1;
     this.validateWinnersCount();
+    console.log("🎲 Winners count updated:", this.winnersCount);
   }
 
   @action
   updateSpecifiedPosts(event) {
     this.specifiedPosts = event.target.value;
     this.validateSpecifiedPosts();
+    console.log("🎲 Specified posts updated:", this.specifiedPosts);
   }
 
   @action
   updateMinParticipants(event) {
     this.minParticipants = parseInt(event.target.value) || 1;
     this.validateMinParticipants();
+    console.log("🎲 Min participants updated:", this.minParticipants);
   }
 
   @action
   updateBackupStrategy(event) {
     this.backupStrategy = event.target.value;
+    console.log("🎲 Backup strategy updated:", this.backupStrategy);
   }
 
   @action
   updateAdditionalNotes(event) {
     this.additionalNotes = event.target.value;
+    console.log("🎲 Additional notes updated:", this.additionalNotes);
   }
 
   // 验证必填字段
@@ -175,17 +188,16 @@ export default class LotteryForm extends Component {
       additional_notes: this.additionalNotes
     };
     
-    console.log("🎲 Lottery form data:", data);
+    console.log("🎲 Getting form data:", data);
     return data;
   }
 
-  didInsertElement() {
-    super.didInsertElement?.(...arguments);
-    // 尝试注册到 composer
-    const composer = document.querySelector('.composer-fields')?.closest('.composer-container');
-    if (composer && composer.__controller) {
-      composer.__controller._lotteryFormComponent = this;
-      console.log("🎲 Registered lottery form to composer");
+  willDestroy() {
+    super.willDestroy?.(...arguments);
+    // 清理全局引用
+    if (window.currentLotteryForm === this) {
+      window.currentLotteryForm = null;
     }
+    console.log("🎲 LotteryForm destroyed");
   }
 }
