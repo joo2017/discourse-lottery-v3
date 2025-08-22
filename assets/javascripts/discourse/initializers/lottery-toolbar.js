@@ -104,15 +104,11 @@ export default {
         
         toolbar.addButton({
           id: "lottery-insert",
-          group: "extras",
+          group: "insertions",  // 改为更显眼的位置
           icon: "dice",
           title: "插入抽奖",
           className: "lottery-toolbar-btn",
-          perform: () => {
-            console.log("🎲 Lottery button clicked");
-            insertLottery();
-          }
-          // 移除 condition，让按钮始终显示，在点击时检查权限
+          perform: insertLottery  // 直接引用函数
         });
         
         console.log("🎲 Lottery button added to toolbar");
