@@ -188,7 +188,11 @@ export default class LotteryForm extends Component {
       additional_notes: this.additionalNotes
     };
     
-    console.log("🎲 Getting form data:", data);
+    console.log("🎲 Getting form data:");
+    console.log("  prize_name:", this.prizeName);
+    console.log("  prize_details:", this.prizeDetails);
+    console.log("  draw_time:", this.drawTime);
+    console.log("  Complete data:", data);
     return data;
   }
 
