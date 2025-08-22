@@ -1,3 +1,24 @@
+<div class="lottery-guard-debug" style="border: 2px solid blue; padding: 10px; margin: 10px; background: #e6f3ff;">
+  <h4>🎲 Lottery Guard Debug</h4>
+  <p><strong>Guard is rendering!</strong></p>
+  <p>Can show form: {{this.canShowLotteryForm}}</p>
+  <p>Current Category ID: {{this.currentCategoryId}}</p>
+  <p>Allowed Category IDs: {{this.allowedCategoryIds}}</p>
+</div>
+
 {{#if this.canShowLotteryForm}}
   <LotteryForm @topic={{@topic}} />
+{{else}}
+  <div style="color: red; padding: 5px;">
+    <strong>Lottery form hidden because:</strong>
+    {{#unless this.allowedCategoryIds.length}}
+      No allowed categories configured
+    {{/unless}}
+    {{#unless this.currentCategoryId}}
+      No category selected
+    {{/unless}}
+    {{#unless (includes this.allowedCategoryIds this.currentCategoryId)}}
+      Current category ({{this.currentCategoryId}}) not in allowed list ({{this.allowedCategoryIds}})
+    {{/unless}}
+  </div>
 {{/if}}
