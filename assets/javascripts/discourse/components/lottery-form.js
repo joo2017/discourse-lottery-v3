@@ -164,7 +164,7 @@ export default class LotteryForm extends Component {
 
   // 获取表单数据
   get formData() {
-    return {
+    const data = {
       prize_name: this.prizeName,
       prize_details: this.prizeDetails,
       draw_time: this.drawTime,
@@ -174,5 +174,18 @@ export default class LotteryForm extends Component {
       backup_strategy: this.backupStrategy,
       additional_notes: this.additionalNotes
     };
+    
+    console.log("🎲 Lottery form data:", data);
+    return data;
+  }
+
+  didInsertElement() {
+    super.didInsertElement?.(...arguments);
+    // 尝试注册到 composer
+    const composer = document.querySelector('.composer-fields')?.closest('.composer-container');
+    if (composer && composer.__controller) {
+      composer.__controller._lotteryFormComponent = this;
+      console.log("🎲 Registered lottery form to composer");
+    }
   }
 }
