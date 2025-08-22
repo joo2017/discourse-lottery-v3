@@ -29,8 +29,18 @@ export default class LotteryForm extends Component {
     // 将组件注册到全局，以便 composer 能找到
     window.currentLotteryForm = this;
     
-    // 初始化数据缓存
-    window.lotteryFormDataCache = null;
+    // 只有当缓存不存在或无效时才初始化缓存
+    if (!window.lotteryFormDataCache || this.isCacheEmpty(window.lotteryFormDataCache)) {
+      window.lotteryFormDataCache = null;
+      console.log("🎲 Initialized empty cache");
+    } else {
+      console.log("🎲 Keeping existing cache:", window.lotteryFormDataCache);
+    }
+  }
+
+  // 检查缓存是否为空
+  isCacheEmpty(cache) {
+    return !cache || !cache.prize_name || !cache.prize_details || !cache.draw_time;
   }
 
   // 获取全局最小参与人数
