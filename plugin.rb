@@ -6,14 +6,6 @@
 
 enabled_site_setting :lottery_enabled
 
-# name: discourse-lottery-v3
-# about: A comprehensive and robust lottery plugin for Discourse, based on the V3 blueprint.
-# version: 0.1
-# authors: [Your Name]
-# url: [Your GitHub Repo URL]
-
-enabled_site_setting :lottery_enabled
-
 after_initialize do
   # 加载模型和服务
   require_relative 'lib/lottery'
