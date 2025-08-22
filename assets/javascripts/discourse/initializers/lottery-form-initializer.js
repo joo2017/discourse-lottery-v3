@@ -22,9 +22,20 @@ export default {
             if (formData.prize_name && formData.prize_details && formData.draw_time) {
               console.log("🎲 Cache data is valid, using cached data");
               
-              // 将数据保存到全局变量，供后台使用
-              window.pendingLotteryData = formData;
-              console.log("🎲 Saved lottery data to global variable");
+              // 确保 custom_fields 对象存在
+              const model = this.get("model");
+              if (!model.custom_fields) {
+                model.set("custom_fields", {});
+              }
+              
+              // 直接设置到模型属性
+              model.set("custom_fields.lottery", JSON.stringify(formData));
+              
+              // 标记模型为脏数据
+              model.notifyPropertyChange("custom_fields");
+              
+              console.log("🎲 Saved lottery data to custom_fields");
+              console.log("🎲 Final model custom_fields:", model.custom_fields);
               
               // 清理缓存
               window.lotteryFormDataCache = null;
@@ -42,9 +53,19 @@ export default {
             if (formData.prize_name && formData.prize_details && formData.draw_time) {
               console.log("🎲 Component data is valid, using component data");
               
-              // 将数据保存到全局变量，供后台使用
-              window.pendingLotteryData = formData;
-              console.log("🎲 Saved lottery data to global variable");
+              // 确保 custom_fields 对象存在
+              const model = this.get("model");
+              if (!model.custom_fields) {
+                model.set("custom_fields", {});
+              }
+              
+              // 直接设置到模型属性
+              model.set("custom_fields.lottery", JSON.stringify(formData));
+              
+              // 标记模型为脏数据
+              model.notifyPropertyChange("custom_fields");
+              
+              console.log("🎲 Saved lottery data to custom_fields");
             } else {
               console.log("🎲 Component data is invalid (empty fields), not saving");
             }
