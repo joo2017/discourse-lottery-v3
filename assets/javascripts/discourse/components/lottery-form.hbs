@@ -1,109 +1,123 @@
-<div class="lottery-form">
-  <div class="lottery-form-header">
-    <h3>🎲 创建抽奖活动</h3>
-    <p class="lottery-form-description">
-      请填写以下信息创建抽奖活动。所有标有 <span class="required">*</span> 的字段都是必填的。
+<div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin: 15px 0; max-height: 400px; overflow-y: auto;">
+  <div>
+    <h3 style="color: #495057; margin: 0 0 10px 0; font-size: 18px;">🎲 创建抽奖活动</h3>
+    <p style="color: #6c757d; margin: 0 0 20px 0; font-size: 14px;">
+      请填写以下信息创建抽奖活动。所有标有 <span style="color: #dc3545;">*</span> 的字段都是必填的。
     </p>
   </div>
 
-  <div class="lottery-form-body">
+  <div>
     <!-- 活动名称 -->
-    <div class="field-group">
-      <label class="field-label required">活动名称 *</label>
+    <div style="margin-bottom: 16px;">
+      <label style="display: block; font-weight: 500; color: #495057; margin-bottom: 5px; font-size: 14px;">
+        活动名称 <span style="color: #dc3545;">*</span>
+      </label>
       <input 
         type="text" 
-        class="lottery-input"
+        style="width: 100%; box-sizing: border-box; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px;"
         value={{this.prizeName}}
         placeholder="请输入活动名称"
         {{on "input" this.updatePrizeName}}
       />
       {{#if this.errors.prizeName}}
-        <div class="field-error">{{this.errors.prizeName}}</div>
+        <div style="font-size: 12px; color: #dc3545; margin-top: 5px;">{{this.errors.prizeName}}</div>
       {{/if}}
     </div>
 
     <!-- 奖品说明 -->
-    <div class="field-group">
-      <label class="field-label required">奖品说明 *</label>
+    <div style="margin-bottom: 16px;">
+      <label style="display: block; font-weight: 500; color: #495057; margin-bottom: 5px; font-size: 14px;">
+        奖品说明 <span style="color: #dc3545;">*</span>
+      </label>
       <textarea 
-        class="lottery-textarea"
+        style="width: 100%; box-sizing: border-box; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; resize: vertical; min-height: 60px;"
         value={{this.prizeDetails}}
         rows="3"
         placeholder="请详细描述奖品内容"
         {{on "input" this.updatePrizeDetails}}
       ></textarea>
       {{#if this.errors.prizeDetails}}
-        <div class="field-error">{{this.errors.prizeDetails}}</div>
+        <div style="font-size: 12px; color: #dc3545; margin-top: 5px;">{{this.errors.prizeDetails}}</div>
       {{/if}}
     </div>
 
     <!-- 开奖时间 -->
-    <div class="field-group">
-      <label class="field-label required">开奖时间 *</label>
+    <div style="margin-bottom: 16px;">
+      <label style="display: block; font-weight: 500; color: #495057; margin-bottom: 5px; font-size: 14px;">
+        开奖时间 <span style="color: #dc3545;">*</span>
+      </label>
       <input 
         type="datetime-local" 
-        class="lottery-input"
+        style="width: 100%; box-sizing: border-box; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px;"
         value={{this.drawTime}}
         {{on "input" this.updateDrawTime}}
       />
       {{#if this.errors.drawTime}}
-        <div class="field-error">{{this.errors.drawTime}}</div>
+        <div style="font-size: 12px; color: #dc3545; margin-top: 5px;">{{this.errors.drawTime}}</div>
       {{/if}}
     </div>
 
     <!-- 获奖人数 -->
-    <div class="field-group">
-      <label class="field-label required">获奖人数 *</label>
+    <div style="margin-bottom: 16px;">
+      <label style="display: block; font-weight: 500; color: #495057; margin-bottom: 5px; font-size: 14px;">
+        获奖人数 <span style="color: #dc3545;">*</span>
+      </label>
       <input 
         type="number" 
-        class="lottery-input"
+        style="width: 100%; box-sizing: border-box; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px;"
         value={{this.winnersCount}}
         min="1"
         {{on "input" this.updateWinnersCount}}
       />
-      <div class="field-help">这是随机抽奖时的获奖人数。如果您想按指定楼层开奖，请填写下面的"指定中奖楼层"项。</div>
+      <div style="font-size: 12px; color: #6c757d; margin-top: 5px;">这是随机抽奖时的获奖人数。如果您想按指定楼层开奖，请填写下面的"指定中奖楼层"项。</div>
       {{#if this.errors.winnersCount}}
-        <div class="field-error">{{this.errors.winnersCount}}</div>
+        <div style="font-size: 12px; color: #dc3545; margin-top: 5px;">{{this.errors.winnersCount}}</div>
       {{/if}}
     </div>
 
     <!-- 指定中奖楼层 -->
-    <div class="field-group">
-      <label class="field-label">指定中奖楼层（可选）</label>
+    <div style="margin-bottom: 16px;">
+      <label style="display: block; font-weight: 500; color: #495057; margin-bottom: 5px; font-size: 14px;">
+        指定中奖楼层（可选）
+      </label>
       <input 
         type="text" 
-        class="lottery-input"
+        style="width: 100%; box-sizing: border-box; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px;"
         value={{this.specifiedPosts}}
         placeholder="例如：8, 18, 28"
         {{on "input" this.updateSpecifiedPosts}}
       />
-      <div class="field-help">填写此项将覆盖随机抽奖。请填写具体的楼层号，用英文逗号分隔。</div>
+      <div style="font-size: 12px; color: #6c757d; margin-top: 5px;">填写此项将覆盖随机抽奖。请填写具体的楼层号，用英文逗号分隔。</div>
       {{#if this.errors.specifiedPosts}}
-        <div class="field-error">{{this.errors.specifiedPosts}}</div>
+        <div style="font-size: 12px; color: #dc3545; margin-top: 5px;">{{this.errors.specifiedPosts}}</div>
       {{/if}}
     </div>
 
     <!-- 参与门槛 -->
-    <div class="field-group">
-      <label class="field-label required">参与门槛 *</label>
+    <div style="margin-bottom: 16px;">
+      <label style="display: block; font-weight: 500; color: #495057; margin-bottom: 5px; font-size: 14px;">
+        参与门槛 <span style="color: #dc3545;">*</span>
+      </label>
       <input 
         type="number" 
-        class="lottery-input"
+        style="width: 100%; box-sizing: border-box; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px;"
         value={{this.minParticipants}}
         min={{this.globalMinParticipants}}
         {{on "input" this.updateMinParticipants}}
       />
-      <div class="field-help">最少需要 {{this.globalMinParticipants}} 人参与</div>
+      <div style="font-size: 12px; color: #6c757d; margin-top: 5px;">最少需要 {{this.globalMinParticipants}} 人参与</div>
       {{#if this.errors.minParticipants}}
-        <div class="field-error">{{this.errors.minParticipants}}</div>
+        <div style="font-size: 12px; color: #dc3545; margin-top: 5px;">{{this.errors.minParticipants}}</div>
       {{/if}}
     </div>
 
     <!-- 后备策略 -->
-    <div class="field-group">
-      <label class="field-label required">后备策略 *</label>
+    <div style="margin-bottom: 16px;">
+      <label style="display: block; font-weight: 500; color: #495057; margin-bottom: 5px; font-size: 14px;">
+        后备策略 <span style="color: #dc3545;">*</span>
+      </label>
       <select 
-        class="lottery-select"
+        style="width: 100%; box-sizing: border-box; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px;"
         {{on "change" this.updateBackupStrategy}}
       >
         <option value="continue" selected={{eq this.backupStrategy "continue"}}>
@@ -116,10 +130,12 @@
     </div>
 
     <!-- 补充说明 -->
-    <div class="field-group">
-      <label class="field-label">补充说明（可选）</label>
+    <div style="margin-bottom: 16px;">
+      <label style="display: block; font-weight: 500; color: #495057; margin-bottom: 5px; font-size: 14px;">
+        补充说明（可选）
+      </label>
       <textarea 
-        class="lottery-textarea"
+        style="width: 100%; box-sizing: border-box; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; resize: vertical; min-height: 60px;"
         value={{this.additionalNotes}}
         rows="2"
         placeholder="其他需要说明的内容"
@@ -129,13 +145,13 @@
   </div>
 
   <!-- 表单状态提示 -->
-  <div class="lottery-form-footer">
+  <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #dee2e6;">
     {{#unless this.isFormValid}}
-      <div class="form-status error">
+      <div style="padding: 10px 12px; border-radius: 4px; font-size: 14px; background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;">
         请完成所有必填项并修正错误后再提交
       </div>
     {{else}}
-      <div class="form-status success">
+      <div style="padding: 10px 12px; border-radius: 4px; font-size: 14px; background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb;">
         表单填写完整，可以提交
       </div>
     {{/unless}}
