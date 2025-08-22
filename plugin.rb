@@ -10,18 +10,28 @@ after_initialize do
   # 加载模型
   require_relative 'lib/lottery_creator'
   
+  # 定义模型关联
+  add_model_callback('Topic', :after_create) do
+    has_many :lotteries, dependent: :destroy
+  end
+  
   # 监听话题创建事件
   DiscourseEvent.on(:topic_created) do |topic, opts, user|
     next unless SiteSetting.lottery_enabled
     
+    Rails.logger.info "LotteryPlugin: Topic created, checking for lottery data"
+    
     # 检查是否有抽奖数据
     lottery_data = topic.custom_fields['lottery']
     if lottery_data.present?
+      Rails.logger.info "LotteryPlugin: Found lottery data: #{lottery_data}"
       begin
         parsed_data = JSON.parse(lottery_data)
+        Rails.logger.info "LotteryPlugin: Parsed data: #{parsed_data.inspect}"
         LotteryCreator.new(topic, parsed_data, user).create
       rescue => e
-        Rails.logger.error "Failed to create lottery: #{e.message}"
+        Rails.logger.error "LotteryPlugin: Failed to create lottery: #{e.message}"
+        Rails.logger.error "LotteryPlugin: Backtrace: #{e.backtrace.join("\n")}"
         # 在主题下发布错误消息
         PostCreator.create!(
           Discourse.system_user,
@@ -29,30 +39,8 @@ after_initialize do
           raw: "抽奖创建失败：#{e.message}。请联系管理员。"
         )
       end
+    else
+      Rails.logger.info "LotteryPlugin: No lottery data found in custom_fields"
     end
-  end
-
-  # 扩展话题序列化器，添加抽奖信息
-  add_to_serializer(:topic_view, :lottery_info) do
-    lottery = object.topic.lotteries.first
-    if lottery
-      {
-        id: lottery.id,
-        prize_name: lottery.prize_name,
-        prize_details: lottery.prize_details,
-        draw_time: lottery.draw_time,
-        winners_count: lottery.winners_count,
-        min_participants: lottery.min_participants,
-        status: lottery.status,
-        lottery_type: lottery.lottery_type,
-        specified_post_numbers: lottery.specified_post_numbers,
-        backup_strategy: lottery.backup_strategy
-      }
-    end
-  end
-
-  # 指定何时包含抽奖信息
-  add_to_serializer(:topic_view, :include_lottery_info?) do
-    object.topic.lotteries.exists?
   end
 end
