@@ -1,0 +1,176 @@
+<DModal @title="创建抽奖活动" @closeModal={{@closeModal}} class="lottery-settings-modal">
+  <:body>
+    <div class="lottery-modal-content">
+      <!-- 活动名称 -->
+      <div class="control-group">
+        <label class="control-label">活动名称 *</label>
+        <input 
+          type="text" 
+          class="lottery-input {{if this.errors.prizeName 'error'}}"
+          value={{this.prizeName}}
+          placeholder="请输入活动名称"
+          {{on "input" this.updatePrizeName}}
+        />
+        {{#if this.errors.prizeName}}
+          <div class="control-error">{{this.errors.prizeName}}</div>
+        {{/if}}
+      </div>
+
+      <!-- 奖品说明 -->
+      <div class="control-group">
+        <label class="control-label">奖品说明 *</label>
+        <textarea 
+          class="lottery-textarea {{if this.errors.prizeDetails 'error'}}"
+          value={{this.prizeDetails}}
+          rows="3"
+          placeholder="请详细描述奖品内容"
+          {{on "input" this.updatePrizeDetails}}
+        ></textarea>
+        {{#if this.errors.prizeDetails}}
+          <div class="control-error">{{this.errors.prizeDetails}}</div>
+        {{/if}}
+      </div>
+
+      <!-- 开奖时间 -->
+      <div class="control-group">
+        <label class="control-label">开奖时间 *</label>
+        <input 
+          type="datetime-local" 
+          class="lottery-input {{if this.errors.drawTime 'error'}}"
+          value={{this.drawTime}}
+          {{on "input" this.updateDrawTime}}
+        />
+        {{#if this.errors.drawTime}}
+          <div class="control-error">{{this.errors.drawTime}}</div>
+        {{/if}}
+      </div>
+
+      <!-- 获奖人数 -->
+      <div class="control-group">
+        <label class="control-label">获奖人数 *</label>
+        <input 
+          type="number" 
+          class="lottery-input {{if this.errors.winnersCount 'error'}}"
+          value={{this.winnersCount}}
+          min="1"
+          {{on "input" this.updateWinnersCount}}
+        />
+        <div class="control-help">随机抽奖时的获奖人数</div>
+        {{#if this.errors.winnersCount}}
+          <div class="control-error">{{this.errors.winnersCount}}</div>
+        {{/if}}
+      </div>
+
+      <!-- 指定中奖楼层 -->
+      <div class="control-group">
+        <label class="control-label">指定中奖楼层（可选）</label>
+        <input 
+          type="text" 
+          class="lottery-input {{if this.errors.specifiedPosts 'error'}}"
+          value={{this.specifiedPosts}}
+          placeholder="例如：8, 18, 28"
+          {{on "input" this.updateSpecifiedPosts}}
+        />
+        <div class="control-help">填写此项将覆盖随机抽奖</div>
+        {{#if this.errors.specifiedPosts}}
+          <div class="control-error">{{this.errors.specifiedPosts}}</div>
+        {{/if}}
+      </div>
+
+      <!-- 参与门槛 -->
+      <div class="control-group">
+        <label class="control-label">参与门槛 *</label>
+        <input 
+          type="number" 
+          class="lottery-input {{if this.errors.minParticipants 'error'}}"
+          value={{this.minParticipants}}
+          min={{this.globalMinParticipants}}
+          {{on "input" this.updateMinParticipants}}
+        />
+        <div class="control-help">最少需要 {{this.globalMinParticipants}} 人参与</div>
+        {{#if this.errors.minParticipants}}
+          <div class="control-error">{{this.errors.minParticipants}}</div>
+        {{/if}}
+      </div>
+
+      <!-- 后备策略 -->
+      <div class="control-group">
+        <label class="control-label">后备策略 *</label>
+        <select 
+          class="lottery-select"
+          {{on "change" this.updateBackupStrategy}}
+        >
+          <option value="continue" selected={{eq this.backupStrategy "continue"}}>
+            当开奖时人数不足，继续开奖
+          </option>
+          <option value="cancel" selected={{eq this.backupStrategy "cancel"}}>
+            当开奖时人数不足，取消活动
+          </option>
+        </select>
+      </div>
+
+      <!-- 补充说明 -->
+      <div class="control-group">
+        <label class="control-label">补充说明（可选）</label>
+        <textarea 
+          class="lottery-textarea"
+          value={{this.additionalNotes}}
+          rows="2"
+          placeholder="其他需要说明的内容"
+          {{on "input" this.updateAdditionalNotes}}
+        ></textarea>
+      </div>
+    </div>
+  </:body>
+
+  <:footer>
+    <button class="btn btn-primary" {{on "click" this.confirmLottery}} disabled={{not this.isFormValid}}>
+      创建抽奖
+    </button>
+    <button class="btn btn-default" {{on "click" this.cancelLottery}}>
+      取消
+    </button>
+  </:footer>
+</DModal>
+
+<style>
+.lottery-settings-modal {
+  width: 600px;
+}
+
+.lottery-modal-content .control-group {
+  margin-bottom: 15px;
+}
+
+.lottery-modal-content .control-label {
+  font-weight: bold;
+  margin-bottom: 5px;
+  display: block;
+}
+
+.lottery-modal-content .lottery-input,
+.lottery-modal-content .lottery-textarea,
+.lottery-modal-content .lottery-select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.lottery-modal-content .lottery-input.error,
+.lottery-modal-content .lottery-textarea.error {
+  border-color: #e45735;
+}
+
+.lottery-modal-content .control-help {
+  font-size: 12px;
+  color: #999;
+  margin-top: 3px;
+}
+
+.lottery-modal-content .control-error {
+  font-size: 12px;
+  color: #e45735;
+  margin-top: 3px;
+}
+</style>
