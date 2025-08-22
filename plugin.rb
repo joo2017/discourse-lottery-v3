@@ -63,7 +63,7 @@ after_initialize do
         'draw_time' => (Time.current + 1.day).strftime('%Y-%m-%dT%H:%M'),
         'winners_count' => 1,
         'specified_posts' => '',
-        'min_participants' => 5,
+        'min_participants' => 10,  # 修改为 10，符合全局最小要求
         'backup_strategy' => 'continue',
         'additional_notes' => '通过标题关键词自动创建'
       }
