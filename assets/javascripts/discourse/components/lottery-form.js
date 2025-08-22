@@ -28,6 +28,9 @@ export default class LotteryForm extends Component {
     
     // 将组件注册到全局，以便 composer 能找到
     window.currentLotteryForm = this;
+    
+    // 初始化数据缓存
+    window.lotteryFormDataCache = null;
   }
 
   // 获取全局最小参与人数
@@ -51,6 +54,7 @@ export default class LotteryForm extends Component {
   updatePrizeName(event) {
     this.prizeName = event.target.value;
     this.validateRequired("prizeName", this.prizeName, "活动名称");
+    this.cacheFormData(); // 缓存数据
     console.log("🎲 Prize name updated:", this.prizeName);
   }
 
@@ -58,6 +62,7 @@ export default class LotteryForm extends Component {
   updatePrizeDetails(event) {
     this.prizeDetails = event.target.value;
     this.validateRequired("prizeDetails", this.prizeDetails, "奖品说明");
+    this.cacheFormData(); // 缓存数据
     console.log("🎲 Prize details updated:", this.prizeDetails);
   }
 
@@ -66,6 +71,7 @@ export default class LotteryForm extends Component {
     this.drawTime = event.target.value;
     this.validateRequired("drawTime", this.drawTime, "开奖时间");
     this.validateDrawTime();
+    this.cacheFormData(); // 缓存数据
     console.log("🎲 Draw time updated:", this.drawTime);
   }
 
@@ -73,6 +79,7 @@ export default class LotteryForm extends Component {
   updateWinnersCount(event) {
     this.winnersCount = parseInt(event.target.value) || 1;
     this.validateWinnersCount();
+    this.cacheFormData(); // 缓存数据
     console.log("🎲 Winners count updated:", this.winnersCount);
   }
 
@@ -80,6 +87,7 @@ export default class LotteryForm extends Component {
   updateSpecifiedPosts(event) {
     this.specifiedPosts = event.target.value;
     this.validateSpecifiedPosts();
+    this.cacheFormData(); // 缓存数据
     console.log("🎲 Specified posts updated:", this.specifiedPosts);
   }
 
@@ -87,18 +95,21 @@ export default class LotteryForm extends Component {
   updateMinParticipants(event) {
     this.minParticipants = parseInt(event.target.value) || 1;
     this.validateMinParticipants();
+    this.cacheFormData(); // 缓存数据
     console.log("🎲 Min participants updated:", this.minParticipants);
   }
 
   @action
   updateBackupStrategy(event) {
     this.backupStrategy = event.target.value;
+    this.cacheFormData(); // 缓存数据
     console.log("🎲 Backup strategy updated:", this.backupStrategy);
   }
 
   @action
   updateAdditionalNotes(event) {
     this.additionalNotes = event.target.value;
+    this.cacheFormData(); // 缓存数据
     console.log("🎲 Additional notes updated:", this.additionalNotes);
   }
 
@@ -173,6 +184,23 @@ export default class LotteryForm extends Component {
       delete newErrors.minParticipants;
       this.errors = newErrors;
     }
+  }
+
+  // 缓存表单数据
+  cacheFormData() {
+    const data = {
+      prize_name: this.prizeName,
+      prize_details: this.prizeDetails,
+      draw_time: this.drawTime,
+      winners_count: this.winnersCount,
+      specified_posts: this.specifiedPosts,
+      min_participants: this.minParticipants,
+      backup_strategy: this.backupStrategy,
+      additional_notes: this.additionalNotes
+    };
+    
+    window.lotteryFormDataCache = data;
+    console.log("🎲 Cached form data:", data);
   }
 
   // 获取表单数据
