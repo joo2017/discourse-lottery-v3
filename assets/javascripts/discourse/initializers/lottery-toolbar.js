@@ -16,94 +16,80 @@ export default {
         
         const currentCategoryId = Number(composer.get("model.categoryId") || 0);
         
-        console.log("🎲 Lottery toolbar check:");
-        console.log("  Allowed categories:", allowedIds);
-        console.log("  Current category:", currentCategoryId);
-        console.log("  Can show:", allowedIds.includes(currentCategoryId));
-        
         return allowedIds.includes(currentCategoryId);
       }
 
-      // 添加编辑器工具栏按钮
-      api.addToolbarPopupMenuOptionsCallback((composer) => {
-        console.log("🎲 Toolbar popup menu callback called");
+      // 处理抽奖插入的函数
+      function handleLotteryInsert(composer) {
+        const prizeName = prompt("请输入活动名称：");
+        if (!prizeName) return;
         
-        if (canInsertLottery(composer)) {
-          console.log("🎲 Adding lottery option to menu");
-          return {
-            action: "lotteryInsert",  // 改为驼峰命名
-            icon: "dice",
-            label: "插入抽奖",
-            className: "lottery-toolbar-button"
-          };
-        } else {
-          console.log("🎲 Not adding lottery option - category not allowed");
-          return null;
-        }
+        const prizeDetails = prompt("请输入奖品说明：");
+        if (!prizeDetails) return;
+        
+        const drawTime = prompt("请输入开奖时间 (格式: 2025-08-24T20:00)：");
+        if (!drawTime) return;
+        
+        const lotteryData = {
+          prize_name: prizeName,
+          prize_details: prizeDetails,
+          draw_time: drawTime,
+          winners_count: 1,
+          specified_posts: "",
+          min_participants: 10,
+          backup_strategy: "continue",
+          additional_notes: ""
+        };
+        
+        // 缓存表单数据
+        window.lotteryFormDataCache = lotteryData;
+        
+        // 在编辑器中插入占位符
+        const placeholder = `\n\n[lottery]\n活动名称：${prizeName}\n奖品说明：${prizeDetails}\n开奖时间：${drawTime}\n[/lottery]\n\n`;
+        const currentText = composer.get("model.reply") || "";
+        composer.set("model.reply", currentText + placeholder);
+      }
+
+      // 方法1：使用 addComposerToolbarPopupMenuOption
+      api.addComposerToolbarPopupMenuOption({
+        action: "insertLottery",
+        icon: "dice",
+        label: "composer.lottery_insert",
+        condition: (composer) => canInsertLottery(composer)
       });
 
-      // 修改 composer 控制器 - 使用正确的方法注册 action
+      // 注册对应的 action
       api.modifyClass("controller:composer", {
         pluginId: "discourse-lottery-v3",
         
-        // 直接定义 action 方法
-        lotteryInsert() {
-          console.log("🎲 Lottery insert action called");
-          this.openLotteryDialog();
-        },
-
-        openLotteryDialog() {
-          console.log("🎲 Opening lottery dialog");
-          
-          // 检查 modal 服务是否存在
-          if (this.modal) {
-            this.modal.show("lottery-settings", {
-              model: {
-                composer: this
-              }
-            });
-          } else {
-            console.error("🎲 Modal service not found");
-            
-            // 临时替代方案：用 alert 显示表单
-            const formData = this.collectLotteryData();
-            if (formData) {
-              // 插入到编辑器
-              const placeholder = `\n\n[lottery]\n活动名称：${formData.prizeName}\n[/lottery]\n\n`;
-              const currentText = this.get("model.reply") || "";
-              this.set("model.reply", currentText + placeholder);
-              
-              // 保存数据
-              window.lotteryFormDataCache = formData;
-            }
+        actions: {
+          insertLottery() {
+            handleLotteryInsert(this);
           }
-        },
-
-        // 临时收集数据的方法
-        collectLotteryData() {
-          const prizeName = prompt("请输入活动名称：");
-          if (!prizeName) return null;
-          
-          const prizeDetails = prompt("请输入奖品说明：");
-          if (!prizeDetails) return null;
-          
-          const drawTime = prompt("请输入开奖时间 (格式: 2025-08-24T20:00)：");
-          if (!drawTime) return null;
-          
-          return {
-            prize_name: prizeName,
-            prize_details: prizeDetails,
-            draw_time: drawTime,
-            winners_count: 1,
-            specified_posts: "",
-            min_participants: 10,
-            backup_strategy: "continue",
-            additional_notes: ""
-          };
         }
       });
 
-      console.log("🎲 Lottery toolbar initialized successfully");
+      // 方法2：如果上面的方法不工作，尝试这个备用方案
+      /*
+      api.onToolbarCreate((toolbar) => {
+        toolbar.addButton({
+          id: "lottery-button",
+          group: "extras",
+          icon: "dice",
+          title: "插入抽奖",
+          perform: (e) => {
+            const composer = e.target.closest(".d-editor-input")?.closest(".composer-fields")?.controller;
+            if (composer && canInsertLottery(composer)) {
+              handleLotteryInsert(composer);
+            }
+          },
+          condition: () => {
+            const composer = this.container.lookup("controller:composer");
+            return composer && canInsertLottery(composer);
+          }
+        });
+      });
+      */
     });
   },
 };
