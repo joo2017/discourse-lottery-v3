@@ -37,38 +37,46 @@ export default class LotteryForm extends Component {
       this.prizeDetails.trim().length > 0 &&
       this.drawTime.length > 0 &&
       this.winnersCount > 0 &&
-      this.minParticipants >= this.globalMinParticipants
+      this.minParticipants >= this.globalMinParticipants &&
+      Object.keys(this.errors).length === 0
     );
   }
 
   @action
   updatePrizeName(event) {
     this.prizeName = event.target.value;
+    this.validateRequired("prizeName", this.prizeName, "活动名称");
   }
 
   @action
   updatePrizeDetails(event) {
     this.prizeDetails = event.target.value;
+    this.validateRequired("prizeDetails", this.prizeDetails, "奖品说明");
   }
 
   @action
   updateDrawTime(event) {
     this.drawTime = event.target.value;
+    this.validateRequired("drawTime", this.drawTime, "开奖时间");
+    this.validateDrawTime();
   }
 
   @action
   updateWinnersCount(event) {
     this.winnersCount = parseInt(event.target.value) || 1;
+    this.validateWinnersCount();
   }
 
   @action
   updateSpecifiedPosts(event) {
     this.specifiedPosts = event.target.value;
+    this.validateSpecifiedPosts();
   }
 
   @action
   updateMinParticipants(event) {
     this.minParticipants = parseInt(event.target.value) || 1;
+    this.validateMinParticipants();
   }
 
   @action
@@ -79,6 +87,79 @@ export default class LotteryForm extends Component {
   @action
   updateAdditionalNotes(event) {
     this.additionalNotes = event.target.value;
+  }
+
+  // 验证必填字段
+  validateRequired(field, value, label) {
+    if (!value || value.trim().length === 0) {
+      this.errors = { ...this.errors, [field]: `${label}不能为空` };
+    } else {
+      const newErrors = { ...this.errors };
+      delete newErrors[field];
+      this.errors = newErrors;
+    }
+  }
+
+  // 验证开奖时间
+  validateDrawTime() {
+    if (!this.drawTime) return;
+    
+    const drawDate = new Date(this.drawTime);
+    const now = new Date();
+    
+    if (drawDate <= now) {
+      this.errors = { ...this.errors, drawTime: "开奖时间必须是未来时间" };
+    } else {
+      const newErrors = { ...this.errors };
+      delete newErrors.drawTime;
+      this.errors = newErrors;
+    }
+  }
+
+  // 验证获奖人数
+  validateWinnersCount() {
+    if (this.winnersCount < 1) {
+      this.errors = { ...this.errors, winnersCount: "获奖人数不能少于1" };
+    } else {
+      const newErrors = { ...this.errors };
+      delete newErrors.winnersCount;
+      this.errors = newErrors;
+    }
+  }
+
+  // 验证指定楼层
+  validateSpecifiedPosts() {
+    if (!this.specifiedPosts.trim()) {
+      const newErrors = { ...this.errors };
+      delete newErrors.specifiedPosts;
+      this.errors = newErrors;
+      return;
+    }
+
+    const posts = this.specifiedPosts.split(",").map(s => s.trim()).filter(s => s);
+    const invalidPosts = posts.filter(post => {
+      const num = parseInt(post);
+      return isNaN(num) || num < 2; // 楼层号必须是数字且大于1（主楼是1楼）
+    });
+
+    if (invalidPosts.length > 0) {
+      this.errors = { ...this.errors, specifiedPosts: `无效的楼层号: ${invalidPosts.join(", ")}` };
+    } else {
+      const newErrors = { ...this.errors };
+      delete newErrors.specifiedPosts;
+      this.errors = newErrors;
+    }
+  }
+
+  // 验证参与门槛
+  validateMinParticipants() {
+    if (this.minParticipants < this.globalMinParticipants) {
+      this.errors = { ...this.errors, minParticipants: `参与门槛不能低于${this.globalMinParticipants}人` };
+    } else {
+      const newErrors = { ...this.errors };
+      delete newErrors.minParticipants;
+      this.errors = newErrors;
+    }
   }
 
   // 获取表单数据
