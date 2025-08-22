@@ -8,10 +8,11 @@ enabled_site_setting :lottery_enabled
 
 after_initialize do
   # 加载模型
+  require_relative 'lib/lottery'
   require_relative 'lib/lottery_creator'
   
   # 定义模型关联
-  add_model_callback('Topic', :after_create) do
+  Topic.class_eval do
     has_many :lotteries, dependent: :destroy
   end
   
