@@ -1,0 +1,42 @@
+/* 添加到 assets/stylesheets/lottery-button.scss */
+
+.lottery-toolbar-btn {
+  /* 确保按钮可见 */
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  
+  /* 添加明显的样式 */
+  background-color: #ff6b6b !important;
+  color: white !important;
+  border-radius: 4px !important;
+  margin: 0 2px !important;
+  
+  /* 悬停效果 */
+  &:hover {
+    background-color: #ff5252 !important;
+    transform: scale(1.05);
+  }
+  
+  /* 确保图标显示 */
+  .d-icon {
+    color: white !important;
+    font-size: 16px !important;
+  }
+}
+
+/* 添加一个明显的标识 */
+.lottery-toolbar-btn::after {
+  content: "🎲";
+  position: absolute;
+  font-size: 12px;
+  top: -2px;
+  right: -2px;
+  background: #4CAF50;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
