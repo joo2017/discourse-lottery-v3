@@ -22,19 +22,9 @@ export default {
             if (formData.prize_name && formData.prize_details && formData.draw_time) {
               console.log("🎲 Cache data is valid, using cached data");
               
-              // 确保 custom_fields 对象存在
-              if (!this.get("model.custom_fields")) {
-                this.get("model").set("custom_fields", {});
-              }
-              
-              // 设置抽奖数据
-              this.get("model").set("custom_fields.lottery", JSON.stringify(formData));
-              
-              // 强制标记为脏数据，确保保存
-              this.get("model").notifyPropertyChange("custom_fields");
-              
-              console.log("🎲 Saved cached lottery data to custom_fields");
-              console.log("🎲 Final custom_fields:", this.get("model.custom_fields"));
+              // 将数据保存到全局变量，供后台使用
+              window.pendingLotteryData = formData;
+              console.log("🎲 Saved lottery data to global variable");
               
               // 清理缓存
               window.lotteryFormDataCache = null;
@@ -52,12 +42,9 @@ export default {
             if (formData.prize_name && formData.prize_details && formData.draw_time) {
               console.log("🎲 Component data is valid, using component data");
               
-              // 将抽奖数据保存到 custom_fields
-              if (!this.get("model.custom_fields")) {
-                this.get("model").set("custom_fields", {});
-              }
-              this.get("model").set("custom_fields.lottery", JSON.stringify(formData));
-              console.log("🎲 Saved lottery data to custom_fields");
+              // 将数据保存到全局变量，供后台使用
+              window.pendingLotteryData = formData;
+              console.log("🎲 Saved lottery data to global variable");
             } else {
               console.log("🎲 Component data is invalid (empty fields), not saving");
             }
@@ -65,7 +52,6 @@ export default {
             console.log("🎲 No lottery form found");
           }
           
-          console.log("🎲 Model custom_fields:", this.get("model.custom_fields"));
           return this._super(options);
         }
       });
