@@ -52,34 +52,28 @@ after_initialize do
     topic = post.topic
     Rails.logger.info "LotteryPlugin: Post created for topic #{topic.id}, checking for lottery data"
     
-    # 检查话题标题是否包含抽奖相关关键词（临时方案）
-    if topic.title.include?('抽奖') || topic.title.include?('lottery')
-      Rails.logger.info "LotteryPlugin: Detected lottery topic by title: #{topic.title}"
-      
-      # 创建测试数据（临时方案，用于测试后台功能）
-      test_data = {
-        'prize_name' => '测试抽奖活动',
-        'prize_details' => '这是通过标题检测创建的测试抽奖',
-        'draw_time' => (Time.current + 1.day).strftime('%Y-%m-%dT%H:%M'),
-        'winners_count' => 1,
-        'specified_posts' => '',
-        'min_participants' => 10,  # 修改为 10，符合全局最小要求
-        'backup_strategy' => 'continue',
-        'additional_notes' => '通过标题关键词自动创建'
-      }
-      
-      Rails.logger.info "LotteryPlugin: Using test data for lottery creation"
-      
-      # 延迟执行，确保话题创建完成
-      Jobs.enqueue_in(5.seconds, :create_lottery, {
-        topic_id: topic.id,
-        lottery_data: test_data,
-        user_id: user.id
-      })
-      
-      Rails.logger.info "LotteryPlugin: Enqueued lottery creation job for test"
+    # 检查是否有抽奖数据在 custom_fields 中
+    lottery_data = topic.custom_fields['lottery']
+    if lottery_data.present?
+      Rails.logger.info "LotteryPlugin: Found lottery data in custom_fields: #{lottery_data}"
+      begin
+        parsed_data = JSON.parse(lottery_data)
+        Rails.logger.info "LotteryPlugin: Parsed data: #{parsed_data.inspect}"
+        
+        # 延迟执行，确保话题创建完成
+        Jobs.enqueue_in(5.seconds, :create_lottery, {
+          topic_id: topic.id,
+          lottery_data: parsed_data,
+          user_id: user.id
+        })
+        
+        Rails.logger.info "LotteryPlugin: Enqueued lottery creation job"
+      rescue => e
+        Rails.logger.error "LotteryPlugin: Failed to parse lottery data: #{e.message}"
+        Rails.logger.error "LotteryPlugin: Backtrace: #{e.backtrace.join("\n")}"
+      end
     else
-      Rails.logger.info "LotteryPlugin: Topic title does not contain lottery keywords: #{topic.title}"
+      Rails.logger.info "LotteryPlugin: No lottery data found in custom_fields for topic #{topic.id}"
     end
   end
   
