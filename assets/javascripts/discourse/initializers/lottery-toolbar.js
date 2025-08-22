@@ -31,7 +31,7 @@ export default {
         if (canInsertLottery(composer)) {
           console.log("🎲 Adding lottery option to menu");
           return {
-            action: "insertLottery",
+            action: "lotteryInsert",  // 改为驼峰命名
             icon: "dice",
             label: "插入抽奖",
             className: "lottery-toolbar-button"
@@ -42,15 +42,14 @@ export default {
         }
       });
 
-      // 修改 composer 控制器
+      // 修改 composer 控制器 - 使用正确的方法注册 action
       api.modifyClass("controller:composer", {
         pluginId: "discourse-lottery-v3",
         
-        actions: {
-          insertLottery() {
-            console.log("🎲 Insert lottery action called");
-            this.openLotteryDialog();
-          }
+        // 直接定义 action 方法
+        lotteryInsert() {
+          console.log("🎲 Lottery insert action called");
+          this.openLotteryDialog();
         },
 
         openLotteryDialog() {
@@ -65,8 +64,42 @@ export default {
             });
           } else {
             console.error("🎲 Modal service not found");
-            alert("抽奖对话框暂时无法打开，请稍后再试。");
+            
+            // 临时替代方案：用 alert 显示表单
+            const formData = this.collectLotteryData();
+            if (formData) {
+              // 插入到编辑器
+              const placeholder = `\n\n[lottery]\n活动名称：${formData.prizeName}\n[/lottery]\n\n`;
+              const currentText = this.get("model.reply") || "";
+              this.set("model.reply", currentText + placeholder);
+              
+              // 保存数据
+              window.lotteryFormDataCache = formData;
+            }
           }
+        },
+
+        // 临时收集数据的方法
+        collectLotteryData() {
+          const prizeName = prompt("请输入活动名称：");
+          if (!prizeName) return null;
+          
+          const prizeDetails = prompt("请输入奖品说明：");
+          if (!prizeDetails) return null;
+          
+          const drawTime = prompt("请输入开奖时间 (格式: 2025-08-24T20:00)：");
+          if (!drawTime) return null;
+          
+          return {
+            prize_name: prizeName,
+            prize_details: prizeDetails,
+            draw_time: drawTime,
+            winners_count: 1,
+            specified_posts: "",
+            min_participants: 10,
+            backup_strategy: "continue",
+            additional_notes: ""
+          };
         }
       });
 
