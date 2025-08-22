@@ -85,34 +85,34 @@ after_initialize do
   end
   
   Rails.logger.info "LotteryPlugin: Initialization completed"
-end
-
-# 定义后台任务
-module Jobs
-  class CreateLottery < ::Jobs::Base
-    def execute(args)
-      topic_id = args[:topic_id]
-      lottery_data = args[:lottery_data]
-      user_id = args[:user_id]
-      
-      Rails.logger.info "CreateLottery Job: Starting for topic #{topic_id}"
-      
-      begin
-        topic = Topic.find(topic_id)
-        user = User.find(user_id)
+  
+  # 定义后台任务 - 移到 after_initialize 内
+  module ::Jobs
+    class CreateLottery < ::Jobs::Base
+      def execute(args)
+        topic_id = args[:topic_id]
+        lottery_data = args[:lottery_data]
+        user_id = args[:user_id]
         
-        LotteryCreator.new(topic, lottery_data, user).create
-        Rails.logger.info "CreateLottery Job: Successfully created lottery for topic #{topic_id}"
-      rescue => e
-        Rails.logger.error "CreateLottery Job: Failed to create lottery: #{e.message}"
-        Rails.logger.error "CreateLottery Job: Backtrace: #{e.backtrace.join("\n")}"
+        Rails.logger.info "CreateLottery Job: Starting for topic #{topic_id}"
         
-        # 发布错误消息
-        PostCreator.create!(
-          Discourse.system_user,
-          topic_id: topic_id,
-          raw: "抽奖创建失败：#{e.message}。请联系管理员。"
-        )
+        begin
+          topic = Topic.find(topic_id)
+          user = User.find(user_id)
+          
+          LotteryCreator.new(topic, lottery_data, user).create
+          Rails.logger.info "CreateLottery Job: Successfully created lottery for topic #{topic_id}"
+        rescue => e
+          Rails.logger.error "CreateLottery Job: Failed to create lottery: #{e.message}"
+          Rails.logger.error "CreateLottery Job: Backtrace: #{e.backtrace.join("\n")}"
+          
+          # 发布错误消息
+          PostCreator.create!(
+            Discourse.system_user,
+            topic_id: topic_id,
+            raw: "抽奖创建失败：#{e.message}。请联系管理员。"
+          )
+        end
       end
     end
   end
