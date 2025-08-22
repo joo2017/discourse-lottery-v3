@@ -19,16 +19,25 @@ export default class LotteryVisibleGuard extends Component {
   }
 
   get currentCategoryId() {
-    let categoryId = this.composer?.model?.categoryId || 
-                     this.composer?.model?.category_id ||
-                     this.args?.topic?.category_id || 
-                     0;
+    // 尝试多种方式获取当前分类ID
+    let categoryId = 0;
+    
+    if (this.composer?.model) {
+      categoryId = this.composer.model.categoryId || 
+                   this.composer.model.category_id || 
+                   this.composer.model.category?.id ||
+                   0;
+    }
+    
+    // 如果还是0，尝试从args获取
+    if (!categoryId && this.args?.topic) {
+      categoryId = this.args.topic.category_id || this.args.topic.categoryId || 0;
+    }
     
     categoryId = Number(categoryId);
     
     console.log("DEBUG currentCategoryId:", categoryId);
-    console.log("DEBUG composer.model.categoryId:", this.composer?.model?.categoryId);
-    console.log("DEBUG composer.model.category_id:", this.composer?.model?.category_id);
+    console.log("DEBUG composer model:", this.composer?.model);
     
     return categoryId;
   }
@@ -36,11 +45,20 @@ export default class LotteryVisibleGuard extends Component {
   get canShowLotteryForm() {
     const allowedIds = this.allowedCategoryIds;
     const currentId = this.currentCategoryId;
-    const result = allowedIds.length > 0 && currentId > 0 && allowedIds.includes(currentId);
+    
+    // 详细的判断逻辑
+    const hasAllowedIds = allowedIds.length > 0;
+    const hasCurrentId = currentId > 0;
+    const isAllowed = allowedIds.includes(currentId);
     
     console.log("DEBUG Visibility check:");
     console.log("  allowedIds:", allowedIds);
     console.log("  currentId:", currentId);
+    console.log("  hasAllowedIds:", hasAllowedIds);
+    console.log("  hasCurrentId:", hasCurrentId);
+    console.log("  isAllowed:", isAllowed);
+    
+    const result = hasAllowedIds && hasCurrentId && isAllowed;
     console.log("  FINAL RESULT:", result);
     
     return result;
