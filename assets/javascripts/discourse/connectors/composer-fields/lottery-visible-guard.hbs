@@ -1,24 +1,62 @@
-<div class="lottery-guard-debug" style="border: 2px solid blue; padding: 10px; margin: 10px; background: #e6f3ff;">
-  <h4>🎲 Lottery Guard Debug</h4>
-  <p><strong>Guard is rendering!</strong></p>
-  <p>Can show form: {{this.canShowLotteryForm}}</p>
-  <p>Current Category ID: {{this.currentCategoryId}}</p>
-  <p>Allowed Category IDs: {{this.allowedCategoryIds}}</p>
-</div>
+import Component from "@glimmer/component";
+import { inject as service } from "@ember/service";
 
-{{#if this.canShowLotteryForm}}
-  <LotteryForm @topic={{@topic}} />
-{{else}}
-  <div style="color: red; padding: 5px;">
-    <strong>Lottery form hidden because:</strong>
-    {{#unless this.allowedCategoryIds.length}}
-      No allowed categories configured
-    {{/unless}}
-    {{#unless this.currentCategoryId}}
-      No category selected
-    {{/unless}}
-    {{#unless (includes this.allowedCategoryIds this.currentCategoryId)}}
-      Current category ({{this.currentCategoryId}}) not in allowed list ({{this.allowedCategoryIds}})
-    {{/unless}}
-  </div>
-{{/if}}
+export default class LotteryVisibleGuard extends Component {
+  @service composer;
+  @service siteSettings;
+
+  // 获取允许的分类ID列表（category_list 必用 | 分隔，数字ID）
+  get allowedCategoryIds() {
+    const setting = this.siteSettings.lottery_allowed_categories || "";
+    console.log("🎲 [DEBUG] lottery_allowed_categories setting:", setting);
+    
+    const ids = setting
+      .split("|")
+      .map(s => Number(s.trim())) // 添加 trim() 去除空格
+      .filter(id => !isNaN(id) && id > 0); // 确保是有效的正数
+    
+    console.log("🎲 [DEBUG] parsed allowedCategoryIds:", ids);
+    return ids;
+  }
+
+  // 获取当前选择的分类ID，改进获取逻辑
+  get currentCategoryId() {
+    // 优先从 composer 的 model 中获取 categoryId
+    let categoryId = this.composer?.model?.categoryId || 
+                     this.composer?.model?.category_id ||
+                     this.args?.topic?.category_id || 
+                     0;
+    
+    categoryId = Number(categoryId);
+    
+    console.log("🎲 [DEBUG] currentCategoryId:", categoryId);
+    console.log("🎲 [DEBUG] composer.model.categoryId:", this.composer?.model?.categoryId);
+    console.log("🎲 [DEBUG] composer.model.category_id:", this.composer?.model?.category_id);
+    console.log("🎲 [DEBUG] composer.model keys:", this.composer?.model ? Object.keys(this.composer.model) : 'no model');
+    
+    return categoryId;
+  }
+
+  // 是否在允许的分类中显示表单
+  get canShowLotteryForm() {
+    const allowedIds = this.allowedCategoryIds;
+    const currentId = this.currentCategoryId;
+    const isArray = Array.isArray(allowedIds);
+    const hasLength = allowedIds.length > 0;
+    const hasCurrentId = currentId > 0; // 改为 > 0，因为0表示未选择
+    const isIncluded = allowedIds.includes(currentId);
+    
+    console.log("🎲 [DEBUG] Visibility check:");
+    console.log("  - allowedIds:", allowedIds);
+    console.log("  - currentId:", currentId);
+    console.log("  - isArray:", isArray);
+    console.log("  - hasLength:", hasLength);
+    console.log("  - hasCurrentId:", hasCurrentId);
+    console.log("  - isIncluded:", isIncluded);
+    
+    const result = isArray && hasLength && hasCurrentId && isIncluded;
+    console.log("  - FINAL RESULT:", result);
+    
+    return result;
+  }
+}
