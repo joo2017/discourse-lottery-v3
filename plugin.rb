@@ -4,20 +4,17 @@
 # authors: [Your Name]
 # url: [Your GitHub Repo URL]
 
-# name: discourse-lottery-v3
-# about: A comprehensive and robust lottery plugin for Discourse, based on the V3 blueprint.
-# version: 0.1
-# authors: [Your Name]
-# url: [Your GitHub Repo URL]
-
 enabled_site_setting :lottery_enabled
+
+# 注册资源文件
+register_asset "stylesheets/lottery-modal.scss"
+register_asset "stylesheets/lottery-form.scss"
+
+# 注册图标
+register_svg_icon "dice"
 
 after_initialize do
   Rails.logger.info "LotteryPlugin: Starting initialization"
-  
-  # 临时跳过 custom field 注册，直接处理字符串
-  # register_topic_custom_field_type('lottery', :json)
-  # Rails.logger.info "LotteryPlugin: Registered lottery custom field"
   
   # 加载模型和服务
   begin
@@ -34,7 +31,7 @@ after_initialize do
     Rails.logger.error "LotteryPlugin: Failed to load lottery creator: #{e.message}"
   end
   
-  # 定义模型关联 - 使用更可靠的方式
+  # 定义模型关联
   if defined?(Topic)
     Topic.class_eval do
       has_many :lotteries, dependent: :destroy
@@ -44,7 +41,7 @@ after_initialize do
     Rails.logger.error "LotteryPlugin: Topic class not found"
   end
   
-  # 监听话题创建事件 - 使用 post_created 事件（更可靠）
+  # 监听话题创建事件
   DiscourseEvent.on(:post_created) do |post, opts, user|
     next unless SiteSetting.lottery_enabled
     next unless post.post_number == 1  # 只处理主楼层
@@ -79,7 +76,7 @@ after_initialize do
   
   Rails.logger.info "LotteryPlugin: Initialization completed"
   
-  # 定义后台任务 - 移到 after_initialize 内
+  # 定义后台任务
   module ::Jobs
     class CreateLottery < ::Jobs::Base
       def execute(args)
