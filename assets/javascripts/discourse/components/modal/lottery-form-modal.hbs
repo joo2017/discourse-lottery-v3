@@ -14,30 +14,31 @@
       <div class="lottery-form-body">
         <div class="field-group">
           <label class="field-label required">活动名称</label>
-          <Input 
-            @value={{this.prizeName}}
-            @input={{this.updatePrizeName}}
+          <input 
+            value={{this.prizeName}}
+            {{on "input" this.updatePrizeName}}
             class="lottery-input"
             placeholder="例如：iPhone 15 Pro 抽奖"
+            type="text"
           />
         </div>
 
         <div class="field-group">
           <label class="field-label required">奖品说明</label>
-          <Textarea 
-            @value={{this.prizeDetails}}
-            @input={{this.updatePrizeDetails}}
+          <textarea 
+            value={{this.prizeDetails}}
+            {{on "input" this.updatePrizeDetails}}
             class="lottery-textarea"
             placeholder="详细描述奖品内容，如颜色、规格、数量等"
-          />
+          ></textarea>
         </div>
 
         <div class="field-group">
           <label class="field-label required">开奖时间</label>
-          <Input 
-            @value={{this.drawTime}}
-            @input={{this.updateDrawTime}}
-            @type="datetime-local"
+          <input 
+            value={{this.drawTime}}
+            {{on "input" this.updateDrawTime}}
+            type="datetime-local"
             class="lottery-input"
           />
           <div class="field-help">
@@ -47,11 +48,11 @@
 
         <div class="field-group">
           <label class="field-label">获奖人数</label>
-          <Input 
-            @value={{this.winnersCount}}
-            @input={{this.updateWinnersCount}}
-            @type="number"
-            @min="1"
+          <input 
+            value={{this.winnersCount}}
+            {{on "input" this.updateWinnersCount}}
+            type="number"
+            min="1"
             class="lottery-input"
           />
           <div class="field-help">
@@ -61,11 +62,12 @@
 
         <div class="field-group">
           <label class="field-label">指定中奖楼层（可选）</label>
-          <Input 
-            @value={{this.specifiedPosts}}
-            @input={{this.updateSpecifiedPosts}}
+          <input 
+            value={{this.specifiedPosts}}
+            {{on "input" this.updateSpecifiedPosts}}
             class="lottery-input"
             placeholder="例如：8,18,28"
+            type="text"
           />
           <div class="field-help">
             填写此项将覆盖随机抽奖。用英文逗号分隔楼层号
@@ -74,15 +76,15 @@
 
         <div class="field-group">
           <label class="field-label required">参与门槛</label>
-          <Input 
-            @value={{this.minParticipants}}
-            @input={{this.updateMinParticipants}}
-            @type="number"
-            @min={{this.siteSettings.lottery_min_participants_global}}
+          <input 
+            value={{this.minParticipants}}
+            {{on "input" this.updateMinParticipants}}
+            type="number"
+            min={{this.siteSettings.lottery_min_participants_global}}
             class="lottery-input"
           />
           <div class="field-help">
-            最少需要多少人参与才能开奖（不能低于全局设置）
+            最少需要多少人参与才能开奖（不能低于全局设置：{{this.siteSettings.lottery_min_participants_global}}）
           </div>
         </div>
 
@@ -90,7 +92,7 @@
           <label class="field-label required">后备策略</label>
           <select 
             value={{this.backupStrategy}}
-            onchange={{action (mut this.backupStrategy) value="target.value"}}
+            {{on "change" this.updateBackupStrategy}}
             class="lottery-select"
           >
             <option value="continue">人数不足时继续开奖</option>
@@ -100,28 +102,30 @@
 
         <div class="field-group">
           <label class="field-label">补充说明（可选）</label>
-          <Textarea 
-            @value={{this.additionalNotes}}
-            @input={{this.updateAdditionalNotes}}
+          <textarea 
+            value={{this.additionalNotes}}
+            {{on "input" this.updateAdditionalNotes}}
             class="lottery-textarea"
             placeholder="其他需要说明的内容"
-          />
+          ></textarea>
         </div>
       </div>
     </div>
   </:body>
 
   <:footer>
-    <DButton
-      @action={{this.insert}}
-      @disabled={{not this.isValid}}
-      @label="插入抽奖"
-      class="btn-primary"
-    />
-    <DButton
-      @action={{this.cancel}}
-      @label="取消"
-      class="btn-flat"
-    />
+    <button
+      {{on "click" this.insert}}
+      disabled={{not this.isValid}}
+      class="btn btn-primary"
+    >
+      插入抽奖
+    </button>
+    <button
+      {{on "click" this.cancel}}
+      class="btn btn-flat"
+    >
+      取消
+    </button>
   </:footer>
 </DModal>
