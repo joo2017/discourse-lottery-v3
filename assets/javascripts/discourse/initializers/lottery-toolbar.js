@@ -77,18 +77,41 @@ export default {
           return;
         }
 
-        const modal = api.container.lookup("service:modal");
-        if (modal) {
-          modal.show("lottery-form", {
-            model: {
-              onSubmit: handleLotterySubmit
-            }
-          });
-        } else {
-          console.error("🎲 Modal service not found");
-          // 降级到简单提示框
-          fallbackToPrompts();
+        // 尝试使用传统的 showModal API
+        try {
+          const appRoute = api.container.lookup("route:application");
+          if (appRoute) {
+            appRoute.send("showModal", "lottery-form", {
+              model: {
+                onSubmit: handleLotterySubmit
+              }
+            });
+            console.log("🎲 Modal opened successfully");
+            return;
+          }
+        } catch (e) {
+          console.log("🎲 Traditional modal failed:", e.message);
         }
+
+        // 尝试现代的 modal service
+        try {
+          const modal = api.container.lookup("service:modal");
+          if (modal) {
+            modal.show("lottery-form", {
+              model: {
+                onSubmit: handleLotterySubmit
+              }
+            });
+            console.log("🎲 Modern modal opened successfully");
+            return;
+          }
+        } catch (e) {
+          console.log("🎲 Modern modal failed:", e.message);
+        }
+
+        console.error("🎲 All modal methods failed, using fallback");
+        // 降级到简单提示框
+        fallbackToPrompts();
       }
 
       // 降级方案：如果模态框不可用，使用提示框
