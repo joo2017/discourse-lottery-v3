@@ -1,0 +1,6 @@
+{{#if @outletArgs.model.lotteryModalVisible}}
+  <Modal::LotteryModal
+    @model={{@outletArgs.model.lotteryModalModel}}
+    @closeModal={{fn @outletArgs.model.closeLotteryModal}}
+  />
+{{/if}}
