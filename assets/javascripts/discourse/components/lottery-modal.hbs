@@ -1,147 +1,41 @@
-<DModal 
-  @title="🎲 创建抽奖活动" 
-  @closeModal={{action "closeModal"}} 
+<DModal
+  @title="创建抽奖活动"
+  @closeModal={{this.close}}
   class="lottery-modal"
 >
   <:body>
-    <div class="lottery-form-content">
-      
-      {{! 活动名称 }}
-      <div class="form-group">
-        <label class="form-label required">活动名称</label>
-        {{input
-          type="text"
-          value=prizeName
-          class=(concat "form-input" (if errors.prizeName " error"))
-          placeholder="请输入活动名称"
-          input=(action "updatePrizeName")
-        }}
-        {{#if errors.prizeName}}
-          <div class="form-error">{{errors.prizeName}}</div>
-        {{/if}}
-      </div>
-
-      {{! 奖品说明 }}
-      <div class="form-group">
-        <label class="form-label required">奖品说明</label>
-        {{textarea
-          value=prizeDetails
-          class=(concat "form-textarea" (if errors.prizeDetails " error"))
-          placeholder="请描述奖品内容"
-          rows="3"
-          input=(action "updatePrizeDetails")
-        }}
-        {{#if errors.prizeDetails}}
-          <div class="form-error">{{errors.prizeDetails}}</div>
-        {{/if}}
-      </div>
-
-      {{! 开奖时间 }}
-      <div class="form-group">
-        <label class="form-label required">开奖时间</label>
-        {{input
-          type="datetime-local"
-          value=drawTime
-          class=(concat "form-input" (if errors.drawTime " error"))
-          input=(action "updateDrawTime")
-        }}
-        <div class="form-help">选择开奖的具体日期和时间</div>
-        {{#if errors.drawTime}}
-          <div class="form-error">{{errors.drawTime}}</div>
-        {{/if}}
-      </div>
-
-      {{! 抽奖方式显示 }}
-      <div class="form-group">
-        <label class="form-label">抽奖方式</label>
-        <div class="lottery-type-indicator">
-          当前方式：<strong>{{lotteryType}}</strong>
-        </div>
-      </div>
-
-      {{! 获奖人数（随机抽奖时显示） }}
-      {{#unless specifiedPosts}}
-        <div class="form-group">
-          <label class="form-label">获奖人数</label>
-          {{input
-            type="number"
-            value=winnersCount
-            min="1"
-            class="form-input"
-            input=(action "updateWinnersCount")
-          }}
-          <div class="form-help">随机抽奖时的获奖人数</div>
-        </div>
-      {{/unless}}
-
-      {{! 指定楼层（可选） }}
-      <div class="form-group">
-        <label class="form-label">指定中奖楼层（可选）</label>
-        {{input
-          type="text"
-          value=specifiedPosts
-          class="form-input"
-          placeholder="例如：8,18,28"
-          input=(action "updateSpecifiedPosts")
-        }}
-        <div class="form-help">填写此项将覆盖随机抽奖，用英文逗号分隔楼层号</div>
-      </div>
-
-      {{! 参与门槛 }}
-      <div class="form-group">
-        <label class="form-label required">参与门槛</label>
-        {{input
-          type="number"
-          value=minParticipants
-          min=siteSettings.lottery_min_participants_global
-          class=(concat "form-input" (if errors.minParticipants " error"))
-          input=(action "updateMinParticipants")
-        }}
-        <div class="form-help">
-          最少需要多少人参与（全局最小值：{{siteSettings.lottery_min_participants_global}}）
-        </div>
-        {{#if errors.minParticipants}}
-          <div class="form-error">{{errors.minParticipants}}</div>
-        {{/if}}
-      </div>
-
-      {{! 后备策略 }}
-      <div class="form-group">
-        <label class="form-label">后备策略</label>
-        {{combo-box
-          value=backupStrategy
-          content=(array
-            (hash id="continue" name="人数不足时继续开奖")
-            (hash id="cancel" name="人数不足时取消活动")
-          )
-          onChange=(action "updateBackupStrategy")
-          class="form-select"
-        }}
-        <div class="form-help">当开奖时参与人数不足时的处理方式</div>
-      </div>
-
-      {{! 补充说明 }}
-      <div class="form-group">
-        <label class="form-label">补充说明（可选）</label>
-        {{textarea
-          value=additionalNotes
-          class="form-textarea"
-          placeholder="其他需要说明的内容"
-          rows="2"
-          input=(action "updateAdditionalNotes")
-        }}
-      </div>
-
+    <div class="lottery-form">
+      <label>
+        活动名称
+        <Input
+          @value={{this.prizeName}}
+          {{on "input" (fn this.handleInput "prizeName")}}
+        />
+      </label>
+      <label>
+        奖品说明
+        <Textarea
+          @value={{this.prizeDetails}}
+          {{on "input" (fn this.handleInput "prizeDetails")}}
+        />
+      </label>
+      <label>
+        开奖时间 (如 2025-08-30T20:00)
+        <Input
+          @type="datetime-local"
+          @value={{this.drawTime}}
+          {{on "input" (fn this.handleInput "drawTime")}}
+        />
+      </label>
     </div>
   </:body>
-
   <:footer>
-    {{d-button
-      action=(action "validateAndSubmit")
-      label="创建抽奖"
+    <DButton
+      @action={{this.submit}}
+      @label="提交"
+      @disabled={{not this.canSubmit}}
       class="btn-primary"
-      disabled=(not isValid)
-    }}
-    {{d-modal-cancel close=(action "closeModal")}}
+    />
+    <DModalCancel @close={{this.close}} />
   </:footer>
 </DModal>
