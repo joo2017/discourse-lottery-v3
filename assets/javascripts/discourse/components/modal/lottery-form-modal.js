@@ -4,8 +4,6 @@ import { action } from "@ember/object";
 import { inject as service } from "@ember/service";
 
 export default class LotteryFormModal extends Component {
-  @service composer;
-  @service modal;
   @service siteSettings;
 
   @tracked prizeName = "";
@@ -27,44 +25,44 @@ export default class LotteryFormModal extends Component {
   }
 
   @action
-  updatePrizeName(value) {
-    this.prizeName = value;
+  updatePrizeName(event) {
+    this.prizeName = event.target.value;
   }
 
   @action
-  updatePrizeDetails(value) {
-    this.prizeDetails = value;
+  updatePrizeDetails(event) {
+    this.prizeDetails = event.target.value;
   }
 
   @action
-  updateDrawTime(value) {
-    this.drawTime = value;
+  updateDrawTime(event) {
+    this.drawTime = event.target.value;
   }
 
   @action
-  updateWinnersCount(value) {
-    this.winnersCount = parseInt(value) || 1;
+  updateWinnersCount(event) {
+    this.winnersCount = parseInt(event.target.value) || 1;
   }
 
   @action
-  updateSpecifiedPosts(value) {
-    this.specifiedPosts = value;
+  updateSpecifiedPosts(event) {
+    this.specifiedPosts = event.target.value;
   }
 
   @action
-  updateMinParticipants(value) {
-    const num = parseInt(value) || 0;
+  updateMinParticipants(event) {
+    const num = parseInt(event.target.value) || 0;
     this.minParticipants = Math.max(num, this.siteSettings.lottery_min_participants_global);
   }
 
   @action
-  updateBackupStrategy(value) {
-    this.backupStrategy = value;
+  updateBackupStrategy(event) {
+    this.backupStrategy = event.target.value;
   }
 
   @action
-  updateAdditionalNotes(value) {
-    this.additionalNotes = value;
+  updateAdditionalNotes(event) {
+    this.additionalNotes = event.target.value;
   }
 
   @action
@@ -99,18 +97,17 @@ export default class LotteryFormModal extends Component {
 
     console.log("🎲 Lottery form data:", lotteryData);
 
-    // 调用 composer 的 action 来插入内容
-    const composer = this.composer;
-    if (composer && composer.send) {
-      composer.send("insertLotteryContent", lotteryData);
+    // 调用传入的回调函数
+    if (this.args.model?.insertLotteryContent) {
+      this.args.model.insertLotteryContent(lotteryData);
     }
 
     // 关闭模态
-    this.modal.close();
+    this.args.closeModal();
   }
 
   @action
   cancel() {
-    this.modal.close();
+    this.args.closeModal();
   }
 }
