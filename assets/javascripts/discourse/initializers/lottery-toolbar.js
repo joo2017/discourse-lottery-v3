@@ -1,19 +1,27 @@
 import { withPluginApi } from "discourse/lib/plugin-api";
-import showModal from "discourse/lib/show-modal";
+import LotteryFormModal from "../components/modal/lottery-form-modal";
 
 export default {
   name: "lottery-toolbar",
   initialize() {
-    withPluginApi("1.0.0", (api) => {
+    withPluginApi("0.8.31", (api) => {
       console.log("🎲 抽奖工具栏初始化开始...");
 
       // 检查分类是否允许抽奖
       function canInsertLottery() {
         const composer = api.container.lookup("controller:composer");
-        if (!composer) return false;
+        if (!composer) {
+          console.log("🎲 未找到编辑器控制器");
+          return false;
+        }
 
         const allowedCategories = composer.siteSettings?.lottery_allowed_categories;
-        if (!allowedCategories) return false;
+        console.log("🎲 允许的分类设置:", allowedCategories);
+        
+        if (!allowedCategories) {
+          console.log("🎲 未配置允许的分类");
+          return false;
+        }
 
         const allowedIds = allowedCategories
           .split("|")
@@ -21,56 +29,50 @@ export default {
           .filter(id => !isNaN(id) && id > 0);
 
         const currentCategoryId = Number(composer.get("model.categoryId") || 0);
+        
+        console.log("🎲 允许的分类ID数组:", allowedIds);
+        console.log("🎲 当前分类ID:", currentCategoryId);
+        console.log("🎲 是否允许插入抽奖:", allowedIds.includes(currentCategoryId));
+        
         return allowedIds.includes(currentCategoryId);
       }
 
       // 添加工具栏按钮
       api.onToolbarCreate((toolbar) => {
-        console.log("🎲 添加抽奖工具栏按钮");
+        console.log("🎲 正在向工具栏添加抽奖按钮");
+
+        // 检查用户权限（可选）
+        let currentUser = api.getCurrentUser();
+        console.log("🎲 当前用户:", currentUser);
 
         toolbar.addButton({
-          id: "lottery-insert",
+          title: "插入抽奖",
+          id: "insertLottery",
           group: "extras",
           icon: "dice",
-          title: "插入抽奖",
-          className: "lottery-toolbar-btn",
-          perform: () => {
-            console.log("🎲 抽奖按钮被点击");
+          perform: (e) => {
+            console.log("🎲 抽奖按钮被用户点击");
 
             if (!canInsertLottery()) {
-              alert("当前分类不支持抽奖功能");
+              alert("当前分类不支持抽奖功能，请在管理后台的允许分类中创建主题");
               return;
             }
 
-            // 使用传统的 showModal 方法，但传递新式的组件数据
-            const composer = api.container.lookup("controller:composer");
-            
-            showModal("lottery-form", {
-              model: {
-                composer: composer,
-                siteSettings: composer.siteSettings,
-                insertLotteryContent: (lotteryData) => {
-                  console.log("🎲 插入抽奖内容:", lotteryData);
-                  
-                  // 缓存数据供发布时使用
-                  window.lotteryFormDataCache = lotteryData;
-                  
-                  // 创建占位符
-                  const placeholder = `\n\n[lottery]\n活动名称：${lotteryData.prize_name}\n奖品说明：${lotteryData.prize_details}\n开奖时间：${lotteryData.draw_time}\n[/lottery]\n\n`;
-                  
-                  // 插入到编辑器
-                  const currentText = composer.get("model.reply") || "";
-                  composer.set("model.reply", currentText + placeholder);
-                  
-                  console.log("🎲 抽奖内容插入成功");
-                }
-              }
+            // 使用官方推荐的方式显示模态框
+            api.container.lookup("service:modal").show(LotteryFormModal, {
+              model: { 
+                toolbarEvent: e,
+                composer: api.container.lookup("controller:composer"),
+                siteSettings: api.container.lookup("controller:composer").siteSettings
+              },
             });
-          }
+          },
         });
+
+        console.log("🎲 抽奖按钮已成功添加到工具栏");
       });
 
-      console.log("🎲 抽奖工具栏初始化完成");
+      console.log("🎲 抽奖工具栏插件初始化完成");
     });
   },
 };
