@@ -1,4 +1,5 @@
 import { withPluginApi } from "discourse/lib/plugin-api";
+import showModal from "discourse/lib/show-modal";
 
 export default {
   name: "lottery-toolbar",
@@ -41,23 +42,29 @@ export default {
               return;
             }
 
-            // 获取 modal 服务和 composer
-            const modal = api.container.lookup("service:modal");
+            // 使用传统的 showModal 方法，但传递新式的组件数据
             const composer = api.container.lookup("controller:composer");
-
-            // 使用相对路径导入插件中的组件
-            import("../components/modal/lottery-form-modal").then((module) => {
-              const LotteryFormModal = module.default;
-              
-              modal.show(LotteryFormModal, {
-                model: {
-                  composer: composer,
-                  siteSettings: composer.siteSettings
+            
+            showModal("lottery-form", {
+              model: {
+                composer: composer,
+                siteSettings: composer.siteSettings,
+                insertLotteryContent: (lotteryData) => {
+                  console.log("🎲 插入抽奖内容:", lotteryData);
+                  
+                  // 缓存数据供发布时使用
+                  window.lotteryFormDataCache = lotteryData;
+                  
+                  // 创建占位符
+                  const placeholder = `\n\n[lottery]\n活动名称：${lotteryData.prize_name}\n奖品说明：${lotteryData.prize_details}\n开奖时间：${lotteryData.draw_time}\n[/lottery]\n\n`;
+                  
+                  // 插入到编辑器
+                  const currentText = composer.get("model.reply") || "";
+                  composer.set("model.reply", currentText + placeholder);
+                  
+                  console.log("🎲 抽奖内容插入成功");
                 }
-              });
-            }).catch((error) => {
-              console.error("🎲 无法加载抽奖模态框组件:", error);
-              alert("抽奖组件加载失败，请刷新页面重试");
+              }
             });
           }
         });
