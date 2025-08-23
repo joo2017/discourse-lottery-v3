@@ -1,95 +1,117 @@
-import Controller from "@ember/controller";
-import ModalFunctionality from "discourse/mixins/modal-functionality";
+import Component from "@ember/component";
+import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
 
-export default Controller.extend(ModalFunctionality, {
-  // 表单数据
-  prizeName: "",
-  prizeDetails: "",
-  drawTime: "",
-  winnersCount: 1,
-  specifiedPosts: "",
-  minParticipants: 5,
-  backupStrategy: "continue",
-  additionalNotes: "",
+export default class LotteryFormModal extends Component {
+  // 表单数据（使用 @tracked）
+  @tracked prizeName = "";
+  @tracked prizeDetails = "";
+  @tracked drawTime = "";
+  @tracked winnersCount = 1;
+  @tracked specifiedPosts = "";
+  @tracked minParticipants = 5;
+  @tracked backupStrategy = "continue";
+  @tracked additionalNotes = "";
 
-  // 状态
-  isLoading: false,
+  // 模态框状态
+  @tracked flash = "";
+  @tracked flashType = "";
+  @tracked isLoading = false;
 
-  onShow() {
-    console.log("🎲 抽奖表单模态框显示");
-    // 初始化表单
-    this.setProperties({
-      prizeName: "",
-      prizeDetails: "",
-      drawTime: "",
-      winnersCount: 1,
-      specifiedPosts: "",
-      minParticipants: this.get("model.siteSettings.lottery_min_participants_global") || 5,
-      backupStrategy: "continue",
-      additionalNotes: "",
-      isLoading: false
-    });
-
+  constructor() {
+    super(...arguments);
+    console.log("🎲 抽奖表单模态框组件初始化");
+    
+    // 初始化最小参与人数
+    this.minParticipants = this.args.model?.siteSettings?.lottery_min_participants_global || 5;
+    
     // 设置默认开奖时间（1小时后）
     const defaultTime = new Date();
     defaultTime.setHours(defaultTime.getHours() + 1);
-    const timeString = defaultTime.toISOString().slice(0, 16);
-    this.set("drawTime", timeString);
-  },
+    this.drawTime = defaultTime.toISOString().slice(0, 16);
+  }
 
-  // 验证表单
-  isValid() {
-    const hasRequired = this.prizeName && this.prizeDetails && this.drawTime;
-    const validMinParticipants = this.minParticipants >= (this.get("model.siteSettings.lottery_min_participants_global") || 5);
+  // 表单验证
+  get isValid() {
+    const hasRequired = this.prizeName.trim() && 
+                       this.prizeDetails.trim() && 
+                       this.drawTime.trim();
+    const validMinParticipants = this.minParticipants >= this.globalMinParticipants;
     return hasRequired && validMinParticipants;
-  },
+  }
 
+  // 全局最小参与人数
+  get globalMinParticipants() {
+    return this.args.model?.siteSettings?.lottery_min_participants_global || 5;
+  }
+
+  // 显示 flash 消息
   @action
-  submit() {
-    console.log("🎲 提交抽奖表单");
+  showFlash(message, type = "error") {
+    this.flash = message;
+    this.flashType = type;
+  }
 
-    if (!this.isValid()) {
-      this.flash("请填写所有必填字段", "error");
+  // 清除 flash 消息
+  @action
+  clearFlash() {
+    this.flash = "";
+    this.flashType = "";
+  }
+
+  // 关闭模态框的包装器
+  @action
+  closeModalWrapper(data = null) {
+    console.log("🎲 关闭抽奖表单模态框");
+    this.args.closeModal(data);
+  }
+
+  // 提交表单
+  @action
+  async submit() {
+    console.log("🎲 提交抽奖表单");
+    this.clearFlash();
+
+    if (!this.isValid) {
+      this.showFlash("请填写所有必填字段");
       return;
     }
 
     // 验证时间
     const drawDate = new Date(this.drawTime);
     if (isNaN(drawDate.getTime()) || drawDate <= new Date()) {
-      this.flash("开奖时间必须是未来时间", "error");
+      this.showFlash("开奖时间必须是未来时间");
       return;
     }
 
     // 验证参与门槛
-    const globalMin = this.get("model.siteSettings.lottery_min_participants_global") || 5;
-    if (this.minParticipants < globalMin) {
-      this.flash(`参与门槛不能低于全局设置的 ${globalMin} 人`, "error");
+    if (this.minParticipants < this.globalMinParticipants) {
+      this.showFlash(`参与门槛不能低于全局设置的 ${this.globalMinParticipants} 人`);
       return;
     }
 
-    this.set("isLoading", true);
-
-    // 构建抽奖数据
-    const lotteryData = {
-      prize_name: this.prizeName.trim(),
-      prize_details: this.prizeDetails.trim(),
-      draw_time: this.drawTime.trim(),
-      winners_count: this.winnersCount,
-      specified_posts: this.specifiedPosts.trim(),
-      min_participants: this.minParticipants,
-      backup_strategy: this.backupStrategy,
-      additional_notes: this.additionalNotes.trim()
-    };
-
-    console.log("🎲 抽奖数据:", lotteryData);
+    this.isLoading = true;
 
     try {
+      // 构建抽奖数据
+      const lotteryData = {
+        prize_name: this.prizeName.trim(),
+        prize_details: this.prizeDetails.trim(),
+        draw_time: this.drawTime.trim(),
+        winners_count: this.winnersCount,
+        specified_posts: this.specifiedPosts.trim(),
+        min_participants: this.minParticipants,
+        backup_strategy: this.backupStrategy,
+        additional_notes: this.additionalNotes.trim()
+      };
+
+      console.log("🎲 抽奖数据:", lotteryData);
+
       // 缓存数据供后续使用
       window.lotteryFormDataCache = lotteryData;
 
       // 获取编辑器并插入内容
-      const composer = this.get("model.composer");
+      const composer = this.args.model?.composer;
       if (composer) {
         const placeholder = `\n\n[lottery]\n活动名称：${lotteryData.prize_name}\n奖品说明：${lotteryData.prize_details}\n开奖时间：${lotteryData.draw_time}\n[/lottery]\n\n`;
         const currentText = composer.get("model.reply") || "";
@@ -97,22 +119,26 @@ export default Controller.extend(ModalFunctionality, {
 
         console.log("🎲 抽奖内容插入成功");
         
-        // 关闭模态框
-        this.send("closeModal");
+        // 显示成功消息并关闭
+        this.showFlash("抽奖信息已插入编辑器", "success");
+        setTimeout(() => {
+          this.closeModalWrapper({ success: true });
+        }, 1000);
       } else {
-        this.flash("无法获取编辑器", "error");
+        this.showFlash("无法获取编辑器");
       }
     } catch (error) {
       console.error("🎲 插入抽奖内容失败:", error);
-      this.flash("插入失败：" + error.message, "error");
+      this.showFlash("插入失败：" + error.message);
     } finally {
-      this.set("isLoading", false);
+      this.isLoading = false;
     }
-  },
+  }
 
+  // 取消操作
   @action
   cancel() {
     console.log("🎲 取消抽奖表单");
-    this.send("closeModal");
+    this.closeModalWrapper({ cancelled: true });
   }
-});
+}
