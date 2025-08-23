@@ -1,78 +1,228 @@
-import { withPluginApi } from "discourse/lib/plugin-api";
-import LotteryFormModal from "../components/modal/lottery-form-modal";
+import Component from "@glimmer/component";
+import { tracked } from "@glimmer/tracking";
+import { action } from "@ember/object";
+import { inject as service } from "@ember/service";
 
-export default {
-  name: "lottery-toolbar",
-  initialize() {
-    withPluginApi("0.8.31", (api) => {
-      console.log("🎲 抽奖工具栏初始化开始...");
+export default class LotteryFormModal extends Component {
+  @service modal;
+  @service site;
 
-      // 检查分类是否允许抽奖
-      function canInsertLottery() {
-        const composer = api.container.lookup("controller:composer");
-        if (!composer) {
-          console.log("🎲 未找到编辑器控制器");
-          return false;
-        }
+  // 表单数据（使用 @tracked 进行响应式更新）
+  @tracked prizeName = "";
+  @tracked prizeDetails = "";
+  @tracked drawTime = "";
+  @tracked winnersCount = 1;
+  @tracked specifiedPosts = "";
+  @tracked minParticipants = 5;
+  @tracked backupStrategy = "continue";
+  @tracked additionalNotes = "";
+  
+  // 状态管理
+  @tracked isLoading = false;
+  @tracked flash = "";
+  @tracked flashType = "";
 
-        const allowedCategories = composer.siteSettings?.lottery_allowed_categories;
-        console.log("🎲 允许的分类设置:", allowedCategories);
-        
-        if (!allowedCategories) {
-          console.log("🎲 未配置允许的分类");
-          return false;
-        }
+  constructor(owner, args) {
+    super(owner, args);
+    console.log("🎲 抽奖表单模态框组件初始化");
+    console.log("🎲 传入的模型数据:", this.args.model);
+    
+    // 初始化最小参与人数
+    this.minParticipants = this.args.model?.siteSettings?.lottery_min_participants_global || 5;
+    
+    // 设置默认开奖时间（1小时后）
+    const defaultTime = new Date();
+    defaultTime.setHours(defaultTime.getHours() + 1);
+    this.drawTime = defaultTime.toISOString().slice(0, 16);
 
-        const allowedIds = allowedCategories
-          .split("|")
-          .map(id => Number(id.trim()))
-          .filter(id => !isNaN(id) && id > 0);
+    console.log("🎲 初始化完成，默认开奖时间:", this.drawTime);
+    console.log("🎲 最小参与人数:", this.minParticipants);
+  }
 
-        const currentCategoryId = Number(composer.get("model.categoryId") || 0);
-        
-        console.log("🎲 允许的分类ID数组:", allowedIds);
-        console.log("🎲 当前分类ID:", currentCategoryId);
-        console.log("🎲 是否允许插入抽奖:", allowedIds.includes(currentCategoryId));
-        
-        return allowedIds.includes(currentCategoryId);
-      }
-
-      // 添加工具栏按钮
-      api.onToolbarCreate((toolbar) => {
-        console.log("🎲 正在向工具栏添加抽奖按钮");
-
-        // 检查用户权限（可选）
-        let currentUser = api.getCurrentUser();
-        console.log("🎲 当前用户:", currentUser);
-
-        toolbar.addButton({
-          title: "插入抽奖",
-          id: "insertLottery",
-          group: "extras",
-          icon: "dice",
-          perform: (e) => {
-            console.log("🎲 抽奖按钮被用户点击");
-
-            if (!canInsertLottery()) {
-              alert("当前分类不支持抽奖功能，请在管理后台的允许分类中创建主题");
-              return;
-            }
-
-            // 使用官方推荐的方式显示模态框
-            api.container.lookup("service:modal").show(LotteryFormModal, {
-              model: { 
-                toolbarEvent: e,
-                composer: api.container.lookup("controller:composer"),
-                siteSettings: api.container.lookup("controller:composer").siteSettings
-              },
-            });
-          },
-        });
-
-        console.log("🎲 抽奖按钮已成功添加到工具栏");
-      });
-
-      console.log("🎲 抽奖工具栏插件初始化完成");
+  // 表单验证
+  get isValid() {
+    const hasRequiredFields = this.prizeName.trim() && 
+                             this.prizeDetails.trim() && 
+                             this.drawTime.trim();
+    const hasValidMinParticipants = this.minParticipants >= this.globalMinParticipants;
+    
+    const valid = hasRequiredFields && hasValidMinParticipants;
+    console.log("🎲 表单验证结果:", {
+      hasRequiredFields,
+      hasValidMinParticipants,
+      valid
     });
-  },
-};
+    
+    return valid;
+  }
+
+  // 获取全局最小参与人数
+  get globalMinParticipants() {
+    return this.args.model?.siteSettings?.lottery_min_participants_global || 5;
+  }
+
+  // 显示 flash 消息
+  @action
+  showFlash(message, type = "error") {
+    console.log("🎲 显示 flash 消息:", message, type);
+    this.flash = message;
+    this.flashType = type;
+  }
+
+  // 清除 flash 消息
+  @action
+  clearFlash() {
+    console.log("🎲 清除 flash 消息");
+    this.flash = "";
+    this.flashType = "";
+  }
+
+  // 更新表单字段的方法
+  @action
+  updatePrizeName(event) {
+    this.prizeName = event.target.value;
+    this.clearFlash();
+    console.log("🎲 更新活动名称:", this.prizeName);
+  }
+
+  @action
+  updatePrizeDetails(event) {
+    this.prizeDetails = event.target.value;
+    this.clearFlash();
+    console.log("🎲 更新奖品说明:", this.prizeDetails);
+  }
+
+  @action
+  updateDrawTime(event) {
+    this.drawTime = event.target.value;
+    this.clearFlash();
+    console.log("🎲 更新开奖时间:", this.drawTime);
+  }
+
+  @action
+  updateWinnersCount(event) {
+    this.winnersCount = parseInt(event.target.value) || 1;
+    console.log("🎲 更新获奖人数:", this.winnersCount);
+  }
+
+  @action
+  updateSpecifiedPosts(event) {
+    this.specifiedPosts = event.target.value;
+    console.log("🎲 更新指定楼层:", this.specifiedPosts);
+  }
+
+  @action
+  updateMinParticipants(event) {
+    const num = parseInt(event.target.value) || 0;
+    this.minParticipants = Math.max(num, this.globalMinParticipants);
+    this.clearFlash();
+    console.log("🎲 更新参与门槛:", this.minParticipants);
+  }
+
+  @action
+  updateBackupStrategy(event) {
+    this.backupStrategy = event.target.value;
+    console.log("🎲 更新后备策略:", this.backupStrategy);
+  }
+
+  @action
+  updateAdditionalNotes(event) {
+    this.additionalNotes = event.target.value;
+    console.log("🎲 更新补充说明:", this.additionalNotes);
+  }
+
+  // 提交表单
+  @action
+  async submit() {
+    console.log("🎲 开始提交抽奖表单");
+    this.clearFlash();
+
+    if (!this.isValid) {
+      this.showFlash("请填写所有必填字段");
+      return;
+    }
+
+    // 验证时间格式和有效性
+    try {
+      const drawDate = new Date(this.drawTime);
+      if (isNaN(drawDate.getTime())) {
+        this.showFlash("开奖时间格式无效");
+        return;
+      }
+      if (drawDate <= new Date()) {
+        this.showFlash("开奖时间必须是未来时间");
+        return;
+      }
+    } catch (e) {
+      this.showFlash("开奖时间格式无效");
+      return;
+    }
+
+    // 验证参与门槛
+    if (this.minParticipants < this.globalMinParticipants) {
+      this.showFlash(`参与门槛不能低于全局设置的 ${this.globalMinParticipants} 人`);
+      return;
+    }
+
+    this.isLoading = true;
+    console.log("🎲 开始处理表单提交，设置加载状态");
+
+    try {
+      // 构建抽奖数据
+      const lotteryData = {
+        prize_name: this.prizeName.trim(),
+        prize_details: this.prizeDetails.trim(),
+        draw_time: this.drawTime.trim(),
+        winners_count: this.winnersCount,
+        specified_posts: this.specifiedPosts.trim(),
+        min_participants: this.minParticipants,
+        backup_strategy: this.backupStrategy,
+        additional_notes: this.additionalNotes.trim()
+      };
+
+      console.log("🎲 构建的抽奖数据对象:", lotteryData);
+
+      // 缓存数据供后续使用
+      window.lotteryFormDataCache = lotteryData;
+      console.log("🎲 数据已缓存到 window.lotteryFormDataCache");
+
+      // 获取编辑器并插入内容
+      const composer = this.args.model?.composer;
+      console.log("🎲 获取编辑器实例:", composer);
+      
+      if (composer) {
+        const placeholder = `\n\n[lottery]\n活动名称：${lotteryData.prize_name}\n奖品说明：${lotteryData.prize_details}\n开奖时间：${lotteryData.draw_time}\n[/lottery]\n\n`;
+        const currentText = composer.get("model.reply") || "";
+        composer.set("model.reply", currentText + placeholder);
+
+        console.log("🎲 抽奖内容成功插入到编辑器");
+        console.log("🎲 插入的占位符:", placeholder);
+        
+        // 显示成功消息
+        this.showFlash("抽奖信息已插入编辑器", "success");
+        
+        // 延迟关闭模态框，让用户看到成功提示
+        setTimeout(() => {
+          console.log("🎲 关闭模态框");
+          this.args.closeModal();
+        }, 1500);
+      } else {
+        console.error("🎲 无法获取编辑器实例");
+        this.showFlash("无法获取编辑器，请刷新页面重试");
+      }
+    } catch (error) {
+      console.error("🎲 提交表单时发生错误:", error);
+      this.showFlash("提交失败：" + error.message);
+    } finally {
+      this.isLoading = false;
+      console.log("🎲 清除加载状态");
+    }
+  }
+
+  // 取消操作
+  @action
+  cancel() {
+    console.log("🎲 用户取消抽奖表单");
+    this.args.closeModal();
+  }
+}
