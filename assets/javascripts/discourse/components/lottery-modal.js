@@ -1,153 +1,69 @@
-import Component from "@glimmer/component";
-import { tracked } from "@glimmer/tracking";
-import { action } from "@ember/object";
-import { inject as service } from "@ember/service";
+import { withPluginApi } from "discourse/lib/plugin-api";
 
-export default class LotteryModal extends Component {
-  @service siteSettings;
-  
-  @tracked prizeName = "";
-  @tracked prizeDetails = "";
-  @tracked drawTime = "";
-  @tracked winnersCount = 1;
-  @tracked specifiedPosts = "";
-  @tracked minParticipants = this.siteSettings.lottery_min_participants_global || 5;
-  @tracked backupStrategy = "continue";
-  @tracked additionalNotes = "";
-  @tracked errors = {};
-  @tracked flash = null;
+export default {
+  name: "lottery-toolbar",
+  initialize() {
+    withPluginApi("1.0.0", (api) => {
+      console.log("🎲 抽奖工具栏初始化开始...");
 
-  constructor() {
-    super(...arguments);
-    this.minParticipants = this.siteSettings.lottery_min_participants_global || 5;
-  }
+      // 检查分类是否允许抽奖
+      function canInsertLottery() {
+        const composer = api.container.lookup("controller:composer");
+        if (!composer) return false;
 
-  get isValid() {
-    return (
-      this.prizeName.trim() &&
-      this.prizeDetails.trim() &&
-      this.drawTime.trim() &&
-      this.minParticipants >= (this.siteSettings.lottery_min_participants_global || 5)
-    );
-  }
+        const allowedCategories = composer.siteSettings?.lottery_allowed_categories;
+        if (!allowedCategories) return false;
 
-  get lotteryType() {
-    return this.specifiedPosts.trim() ? "指定楼层" : "随机抽取";
-  }
+        const allowedIds = allowedCategories
+          .split("|")
+          .map(id => Number(id.trim()))
+          .filter(id => !isNaN(id) && id > 0);
 
-  @action
-  updatePrizeName(event) {
-    this.prizeName = event.target.value;
-    this.clearError('prizeName');
-  }
-
-  @action
-  updatePrizeDetails(event) {
-    this.prizeDetails = event.target.value;
-    this.clearError('prizeDetails');
-  }
-
-  @action
-  updateDrawTime(event) {
-    this.drawTime = event.target.value;
-    this.clearError('drawTime');
-  }
-
-  @action
-  updateWinnersCount(event) {
-    this.winnersCount = parseInt(event.target.value) || 1;
-  }
-
-  @action
-  updateSpecifiedPosts(event) {
-    this.specifiedPosts = event.target.value;
-  }
-
-  @action
-  updateMinParticipants(event) {
-    this.minParticipants = parseInt(event.target.value) || 1;
-    this.clearError('minParticipants');
-  }
-
-  @action
-  updateBackupStrategy(event) {
-    this.backupStrategy = event.target.value;
-  }
-
-  @action
-  updateAdditionalNotes(event) {
-    this.additionalNotes = event.target.value;
-  }
-
-  @action
-  clearError(field) {
-    if (this.errors[field]) {
-      delete this.errors[field];
-      this.errors = { ...this.errors };
-    }
-    this.flash = null;
-  }
-
-  @action
-  validateAndSubmit() {
-    this.errors = {};
-    this.flash = null;
-
-    // 验证必填字段
-    if (!this.prizeName.trim()) {
-      this.errors.prizeName = "活动名称不能为空";
-    }
-    if (!this.prizeDetails.trim()) {
-      this.errors.prizeDetails = "奖品说明不能为空";
-    }
-    if (!this.drawTime.trim()) {
-      this.errors.drawTime = "开奖时间不能为空";
-    }
-
-    // 验证时间格式
-    if (this.drawTime.trim()) {
-      try {
-        const testDate = new Date(this.drawTime);
-        if (isNaN(testDate.getTime()) || testDate <= new Date()) {
-          this.errors.drawTime = "开奖时间无效或不能是过去时间";
-        }
-      } catch (e) {
-        this.errors.drawTime = "时间格式无效";
+        const currentCategoryId = Number(composer.get("model.categoryId") || 0);
+        return allowedIds.includes(currentCategoryId);
       }
-    }
 
-    // 验证最小参与人数
-    const globalMin = this.siteSettings.lottery_min_participants_global || 5;
-    if (this.minParticipants < globalMin) {
-      this.errors.minParticipants = `参与门槛不能低于${globalMin}人`;
-    }
+      // 添加工具栏按钮
+      api.onToolbarCreate((toolbar) => {
+        console.log("🎲 添加抽奖工具栏按钮");
 
-    // 如果有错误，显示错误并不提交
-    if (Object.keys(this.errors).length > 0) {
-      this.flash = "请检查并修正表单中的错误";
-      return;
-    }
+        toolbar.addButton({
+          id: "lottery-insert",
+          group: "extras",
+          icon: "dice",
+          title: "插入抽奖",
+          className: "lottery-toolbar-btn",
+          perform: () => {
+            console.log("🎲 抽奖按钮被点击");
 
-    // 创建抽奖数据
-    const lotteryData = {
-      prize_name: this.prizeName.trim(),
-      prize_details: this.prizeDetails.trim(),
-      draw_time: this.drawTime.trim(),
-      winners_count: this.winnersCount,
-      specified_posts: this.specifiedPosts.trim(),
-      min_participants: this.minParticipants,
-      backup_strategy: this.backupStrategy,
-      additional_notes: this.additionalNotes.trim()
-    };
+            if (!canInsertLottery()) {
+              alert("当前分类不支持抽奖功能");
+              return;
+            }
 
-    console.log("🎲 Lottery form submitted with data:", lotteryData);
+            // 获取 modal 服务和 composer
+            const modal = api.container.lookup("service:modal");
+            const composer = api.container.lookup("controller:composer");
 
-    // 关闭模态框并传递数据
-    this.args.closeModal(lotteryData);
-  }
+            // 动态导入组件并显示模态框
+            import("discourse/components/modal/lottery-form-modal").then((module) => {
+              const LotteryFormModal = module.default;
+              
+              modal.show(LotteryFormModal, {
+                model: {
+                  composer: composer,
+                  siteSettings: composer.siteSettings
+                }
+              });
+            }).catch((error) => {
+              console.error("🎲 无法加载抽奖模态框组件:", error);
+              alert("抽奖组件加载失败，请刷新页面重试");
+            });
+          }
+        });
+      });
 
-  @action
-  closeModal() {
-    this.args.closeModal();
-  }
-}
+      console.log("🎲 抽奖工具栏初始化完成");
+    });
+  },
+};
