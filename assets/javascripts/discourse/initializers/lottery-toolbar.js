@@ -49,13 +49,46 @@ export default {
           openLotteryModalFromToolbar() {
             console.log("🎲 d-editor action: openLotteryModalFromToolbar");
             
-            // 获取 composer controller
-            const composer = this.composerController;
+            // 推荐方式：使用容器查找 composer 控制器
+            let composer = null;
+            
+            // 方法1: 尝试通过 this.container
+            if (this.container) {
+              try {
+                composer = this.container.lookup("controller:composer");
+                console.log("🎲 Found composer via this.container");
+              } catch (e) {
+                console.log("🎲 this.container.lookup failed:", e.message);
+              }
+            }
+            
+            // 方法2: 尝试通过 getOwner (如果方法1失败)
+            if (!composer && window.require) {
+              try {
+                const owner = window.require('discourse-common/lib/get-owner').default(this);
+                composer = owner.lookup('controller:composer');
+                console.log("🎲 Found composer via getOwner");
+              } catch (e) {
+                console.log("🎲 getOwner failed:", e.message);
+              }
+            }
+            
+            // 方法3: 使用全局 api.container (最后的备选方案)
+            if (!composer) {
+              try {
+                composer = api.container.lookup("controller:composer");
+                console.log("🎲 Found composer via api.container");
+              } catch (e) {
+                console.log("🎲 api.container.lookup failed:", e.message);
+              }
+            }
+            
             if (composer) {
               console.log("🎲 Found composer controller, sending openLotteryModal");
               composer.send("openLotteryModal");
             } else {
-              console.error("🎲 No composer controller found");
+              console.error("🎲 No composer controller found via any method");
+              alert("无法找到编辑器控制器，请刷新页面后重试");
             }
           }
         }
