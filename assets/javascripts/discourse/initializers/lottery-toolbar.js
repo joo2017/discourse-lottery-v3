@@ -41,38 +41,37 @@ export default {
               return;
             }
 
-            // 使用 Discourse 的模态系统
-            const modal = api.container.lookup("service:modal");
-            modal.show("lottery-form-modal", {
-              model: {
-                toolbarEvent: e
-              }
+            // 导入组件并使用新的模态 API
+            import("discourse/components/modal/lottery-form-modal").then((module) => {
+              const LotteryFormModal = module.default;
+              const composer = api.container.lookup("controller:composer");
+              const modal = api.container.lookup("service:modal");
+              
+              modal.show(LotteryFormModal, {
+                model: {
+                  insertLotteryContent: (lotteryData) => {
+                    console.log("🎲 Inserting lottery content:", lotteryData);
+                    
+                    // 缓存数据供发布时使用
+                    window.lotteryFormDataCache = lotteryData;
+                    
+                    // 创建占位符
+                    const placeholder = `\n\n[lottery]\n活动名称：${lotteryData.prize_name}\n奖品说明：${lotteryData.prize_details}\n开奖时间：${lotteryData.draw_time}\n[/lottery]\n\n`;
+                    
+                    // 插入到编辑器
+                    const currentText = composer.get("model.reply") || "";
+                    composer.set("model.reply", currentText + placeholder);
+                    
+                    console.log("🎲 Lottery content inserted successfully");
+                  }
+                }
+              });
+            }).catch((error) => {
+              console.error("🎲 Failed to load lottery modal component:", error);
+              alert("抽奖组件加载失败，请刷新页面重试");
             });
           }
         });
-      });
-
-      // 注册模态组件
-      api.modifyClass("controller:composer", {
-        pluginId: "discourse-lottery-v3",
-
-        actions: {
-          insertLotteryContent(lotteryData) {
-            console.log("🎲 Inserting lottery content:", lotteryData);
-            
-            // 缓存数据供发布时使用
-            window.lotteryFormDataCache = lotteryData;
-            
-            // 创建占位符
-            const placeholder = `\n\n[lottery]\n活动名称：${lotteryData.prize_name}\n奖品说明：${lotteryData.prize_details}\n开奖时间：${lotteryData.draw_time}\n[/lottery]\n\n`;
-            
-            // 插入到编辑器
-            const currentText = this.get("model.reply") || "";
-            this.set("model.reply", currentText + placeholder);
-            
-            console.log("🎲 Lottery content inserted successfully");
-          }
-        }
       });
 
       console.log("🎲 Lottery toolbar initialized successfully");
