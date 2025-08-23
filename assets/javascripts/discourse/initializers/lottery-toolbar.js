@@ -4,7 +4,7 @@ export default {
   name: "lottery-toolbar",
   initialize() {
     withPluginApi("1.0.0", (api) => {
-      console.log("🎲 Lottery toolbar initializer starting...");
+      console.log("🎲 Modern lottery toolbar initializer starting...");
       
       // 检查分类是否允许抽奖的辅助函数
       function canInsertLottery() {
@@ -36,21 +36,65 @@ export default {
         return allowedIds.includes(currentCategoryId);
       }
 
-      // 处理抽奖插入的函数
-      function insertLottery() {
-        console.log("🎲 Insert lottery function called");
+      // 处理模态框提交的函数
+      function handleLotterySubmit(lotteryData) {
+        console.log("🎲 Lottery data submitted:", lotteryData);
         
         const composer = api.container.lookup("controller:composer");
         if (!composer) {
-          console.error("🎲 No composer found in insertLottery");
+          console.error("🎲 No composer found in handleLotterySubmit");
           return;
         }
 
+        // 缓存数据供后续使用
+        window.lotteryFormDataCache = lotteryData;
+        
+        // 在编辑器中插入占位符文本
+        const placeholder = `\n\n[lottery]\n活动名称：${lotteryData.prize_name}\n奖品说明：${lotteryData.prize_details}\n开奖时间：${lotteryData.draw_time}\n[/lottery]\n\n`;
+        
+        // 直接修改 composer 内容
+        const currentText = composer.get("model.reply") || "";
+        composer.set("model.reply", currentText + placeholder);
+        
+        console.log("🎲 Inserted lottery placeholder into composer");
+        
+        // 显示成功消息
+        const appEvents = api.container.lookup("service:app-events");
+        if (appEvents) {
+          appEvents.trigger("d-modal:notify", {
+            type: "success",
+            message: "抽奖信息已插入编辑器，请填写主题标题并发布"
+          });
+        }
+      }
+
+      // 打开模态框的函数
+      function openLotteryModal() {
+        console.log("🎲 Opening lottery modal");
+        
         if (!canInsertLottery()) {
-          alert("当前分类不支持抽奖功能");
+          alert("当前分类不支持抽奖功能，请在管理后台设置的允许分类中创建主题");
           return;
         }
 
+        const modal = api.container.lookup("service:modal");
+        if (modal) {
+          modal.show("lottery-form", {
+            model: {
+              onSubmit: handleLotterySubmit
+            }
+          });
+        } else {
+          console.error("🎲 Modal service not found");
+          // 降级到简单提示框
+          fallbackToPrompts();
+        }
+      }
+
+      // 降级方案：如果模态框不可用，使用提示框
+      function fallbackToPrompts() {
+        console.log("🎲 Using fallback prompts");
+        
         const prizeName = prompt("请输入活动名称：");
         if (!prizeName) return;
         
@@ -72,49 +116,50 @@ export default {
           return;
         }
         
+        const composer = api.container.lookup("controller:composer");
         const lotteryData = {
           prize_name: prizeName,
           prize_details: prizeDetails,
           draw_time: drawTime,
           winners_count: 1,
           specified_posts: "",
-          min_participants: composer.siteSettings?.lottery_min_participants_global || 5,
+          min_participants: composer?.siteSettings?.lottery_min_participants_global || 5,
           backup_strategy: "continue",
           additional_notes: ""
         };
         
-        console.log("🎲 Created lottery data:", lotteryData);
-        
-        // 缓存数据供后续使用
-        window.lotteryFormDataCache = lotteryData;
-        
-        // 在编辑器中插入占位符文本
-        const placeholder = `\n\n[lottery]\n活动名称：${prizeName}\n奖品说明：${prizeDetails}\n开奖时间：${drawTime}\n[/lottery]\n\n`;
-        
-        // 直接修改 composer 内容
-        const currentText = composer.get("model.reply") || "";
-        composer.set("model.reply", currentText + placeholder);
-        
-        console.log("🎲 Inserted lottery placeholder into composer");
+        handleLotterySubmit(lotteryData);
       }
 
-      // 使用最稳定的 onToolbarCreate API
+      // 使用工具栏按钮
       api.onToolbarCreate((toolbar) => {
-        console.log("🎲 Toolbar created, adding lottery button");
+        console.log("🎲 Toolbar created, adding modern lottery button");
         
         toolbar.addButton({
           id: "lottery-insert",
-          group: "insertions",  // 改为更显眼的位置
+          group: "extras",
           icon: "dice",
-          title: "插入抽奖",
+          title: "创建抽奖",
           className: "lottery-toolbar-btn",
-          perform: insertLottery  // 直接引用函数
+          shortcut: "Ctrl+L",
+          perform: () => {
+            console.log("🎲 Modern lottery button clicked");
+            openLotteryModal();
+          }
         });
         
-        console.log("🎲 Lottery button added to toolbar");
+        console.log("🎲 Modern lottery button added to toolbar");
       });
 
-      console.log("🎲 Lottery toolbar initializer completed");
+      // 注册模态框名称（如果需要）
+      try {
+        // 这里可以添加额外的模态框注册逻辑
+        console.log("🎲 Modal components should be auto-discovered");
+      } catch (e) {
+        console.log("🎲 Modal registration not needed:", e.message);
+      }
+
+      console.log("🎲 Modern lottery toolbar initializer completed");
     });
   },
 };
