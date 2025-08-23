@@ -1,0 +1,127 @@
+<DModal
+  @title="创建抽奖活动"
+  @closeModal={{this.cancel}}
+  class="lottery-form-modal"
+>
+  <:body>
+    <div class="lottery-form">
+      <div class="lottery-form-header">
+        <p class="lottery-form-description">
+          填写抽奖活动信息，系统将自动在主题中显示抽奖详情并在指定时间开奖。
+        </p>
+      </div>
+
+      <div class="lottery-form-body">
+        <div class="field-group">
+          <label class="field-label required">活动名称</label>
+          <Input 
+            @value={{this.prizeName}}
+            @input={{this.updatePrizeName}}
+            class="lottery-input"
+            placeholder="例如：iPhone 15 Pro 抽奖"
+          />
+        </div>
+
+        <div class="field-group">
+          <label class="field-label required">奖品说明</label>
+          <Textarea 
+            @value={{this.prizeDetails}}
+            @input={{this.updatePrizeDetails}}
+            class="lottery-textarea"
+            placeholder="详细描述奖品内容，如颜色、规格、数量等"
+          />
+        </div>
+
+        <div class="field-group">
+          <label class="field-label required">开奖时间</label>
+          <Input 
+            @value={{this.drawTime}}
+            @input={{this.updateDrawTime}}
+            @type="datetime-local"
+            class="lottery-input"
+          />
+          <div class="field-help">
+            请选择未来的时间点，系统将在此时间自动开奖
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label">获奖人数</label>
+          <Input 
+            @value={{this.winnersCount}}
+            @input={{this.updateWinnersCount}}
+            @type="number"
+            @min="1"
+            class="lottery-input"
+          />
+          <div class="field-help">
+            随机抽奖的获奖人数。如果填写了"指定楼层"，此项将被忽略
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label">指定中奖楼层（可选）</label>
+          <Input 
+            @value={{this.specifiedPosts}}
+            @input={{this.updateSpecifiedPosts}}
+            class="lottery-input"
+            placeholder="例如：8,18,28"
+          />
+          <div class="field-help">
+            填写此项将覆盖随机抽奖。用英文逗号分隔楼层号
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label required">参与门槛</label>
+          <Input 
+            @value={{this.minParticipants}}
+            @input={{this.updateMinParticipants}}
+            @type="number"
+            @min={{this.siteSettings.lottery_min_participants_global}}
+            class="lottery-input"
+          />
+          <div class="field-help">
+            最少需要多少人参与才能开奖（不能低于全局设置）
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label required">后备策略</label>
+          <select 
+            value={{this.backupStrategy}}
+            onchange={{action (mut this.backupStrategy) value="target.value"}}
+            class="lottery-select"
+          >
+            <option value="continue">人数不足时继续开奖</option>
+            <option value="cancel">人数不足时取消活动</option>
+          </select>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label">补充说明（可选）</label>
+          <Textarea 
+            @value={{this.additionalNotes}}
+            @input={{this.updateAdditionalNotes}}
+            class="lottery-textarea"
+            placeholder="其他需要说明的内容"
+          />
+        </div>
+      </div>
+    </div>
+  </:body>
+
+  <:footer>
+    <DButton
+      @action={{this.insert}}
+      @disabled={{not this.isValid}}
+      @label="插入抽奖"
+      class="btn-primary"
+    />
+    <DButton
+      @action={{this.cancel}}
+      @label="取消"
+      class="btn-flat"
+    />
+  </:footer>
+</DModal>
