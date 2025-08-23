@@ -84,8 +84,22 @@ export default {
             }
             
             if (composer) {
-              console.log("🎲 Found composer controller, sending openLotteryModal");
-              composer.send("openLotteryModal");
+              console.log("🎲 Found composer controller, calling action directly");
+              
+              // 直接调用 action 而不是使用 send
+              if (composer.actions && composer.actions.openLotteryModal) {
+                composer.actions.openLotteryModal.call(composer);
+              } else if (typeof composer.openLotteryModal === 'function') {
+                composer.openLotteryModal();
+              } else {
+                console.log("🎲 No openLotteryModal action found, using fallback");
+                // 直接调用降级方案
+                if (composer.actions && composer.actions.showFallbackLotteryForm) {
+                  composer.actions.showFallbackLotteryForm.call(composer);
+                } else {
+                  showDirectFallbackForm();
+                }
+              }
             } else {
               console.error("🎲 No composer controller found via any method");
               alert("无法找到编辑器控制器，请刷新页面后重试");
@@ -227,11 +241,66 @@ export default {
           const composer = api.container.lookup("controller:composer");
           if (composer) {
             console.log("🎲 Found composer via direct lookup");
-            composer.send("openLotteryModal");
+            
+            // 直接调用 action 而不是使用 send
+            if (composer.actions && composer.actions.openLotteryModal) {
+              composer.actions.openLotteryModal.call(composer);
+            } else if (typeof composer.openLotteryModal === 'function') {
+              composer.openLotteryModal();
+            } else {
+              console.log("🎲 No openLotteryModal action found in direct approach, using fallback");
+              showDirectFallbackForm();
+            }
           } else {
-            console.error("🎲 Direct lookup failed, showing alert");
-            alert("未找到编辑器控制器，无法打开抽奖模态框");
+            console.error("🎲 Direct lookup failed, using fallback form");
+            showDirectFallbackForm();
           }
+        }
+
+        // 完全独立的降级表单方法
+        function showDirectFallbackForm() {
+          console.log("🎲 Showing direct fallback form (no composer dependency)");
+          
+          if (!canInsertLottery()) {
+            alert("当前分类不支持抽奖功能，请在管理后台设置的允许分类中创建主题");
+            return;
+          }
+
+          const prizeName = prompt("📝 请输入活动名称：");
+          if (!prizeName || !prizeName.trim()) return;
+          
+          const prizeDetails = prompt("🎁 请输入奖品说明：");
+          if (!prizeDetails || !prizeDetails.trim()) return;
+          
+          const drawTime = prompt("⏰ 请输入开奖时间 (格式: 2025-08-25T20:00)：");
+          if (!drawTime || !drawTime.trim()) return;
+          
+          // 验证时间
+          try {
+            const testDate = new Date(drawTime);
+            if (isNaN(testDate.getTime()) || testDate <= new Date()) {
+              alert("时间格式无效或不能是过去时间");
+              return;
+            }
+          } catch (e) {
+            alert("时间格式无效");
+            return;
+          }
+          
+          const composer = api.container.lookup("controller:composer");
+          const lotteryData = {
+            prize_name: prizeName.trim(),
+            prize_details: prizeDetails.trim(),
+            draw_time: drawTime.trim(),
+            winners_count: 1,
+            specified_posts: "",
+            min_participants: composer?.siteSettings?.lottery_min_participants_global || 5,
+            backup_strategy: "continue",
+            additional_notes: ""
+          };
+          
+          handleLotterySubmit(lotteryData);
+          alert("✅ 抽奖信息已插入编辑器！");
         }
         
         console.log("🎲 Lottery button with dual approach added to toolbar");
