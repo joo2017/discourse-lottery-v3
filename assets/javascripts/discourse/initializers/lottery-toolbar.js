@@ -1,5 +1,4 @@
 import { withPluginApi } from "discourse/lib/plugin-api";
-import showModal from "discourse/lib/show-modal";
 
 export default {
   name: "lottery-toolbar",
@@ -42,13 +41,23 @@ export default {
               return;
             }
 
-            // 使用官方的 showModal API
-            showModal("lottery-form", {
-              model: {
-                // 传递必要的数据
-                composer: api.container.lookup("controller:composer"),
-                siteSettings: api.container.lookup("controller:composer").siteSettings
-              }
+            // 获取 modal 服务和 composer
+            const modal = api.container.lookup("service:modal");
+            const composer = api.container.lookup("controller:composer");
+
+            // 使用相对路径导入插件中的组件
+            import("../components/modal/lottery-form-modal").then((module) => {
+              const LotteryFormModal = module.default;
+              
+              modal.show(LotteryFormModal, {
+                model: {
+                  composer: composer,
+                  siteSettings: composer.siteSettings
+                }
+              });
+            }).catch((error) => {
+              console.error("🎲 无法加载抽奖模态框组件:", error);
+              alert("抽奖组件加载失败，请刷新页面重试");
             });
           }
         });
