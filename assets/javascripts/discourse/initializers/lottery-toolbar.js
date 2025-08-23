@@ -4,7 +4,7 @@ export default {
   name: "lottery-toolbar",
   initialize() {
     withPluginApi("1.0.0", (api) => {
-      console.log("🎲 Official correct lottery toolbar initializer starting...");
+      console.log("🎲 Correct sendAction lottery toolbar initializer starting...");
       
       // 检查分类是否允许抽奖
       function canInsertLottery() {
@@ -41,7 +41,27 @@ export default {
         console.log("🎲 Inserted lottery placeholder into composer");
       }
 
-      // 修改 composer 控制器以支持模态框状态
+      // 修改 d-editor 组件以添加 action
+      api.modifyClass("component:d-editor", {
+        pluginId: "discourse-lottery-v3",
+        
+        actions: {
+          openLotteryModalFromToolbar() {
+            console.log("🎲 d-editor action: openLotteryModalFromToolbar");
+            
+            // 获取 composer controller
+            const composer = this.composerController;
+            if (composer) {
+              console.log("🎲 Found composer controller, sending openLotteryModal");
+              composer.send("openLotteryModal");
+            } else {
+              console.error("🎲 No composer controller found");
+            }
+          }
+        }
+      });
+
+      // 修改 composer 控制器以添加模态框相关的 actions
       api.modifyClass("controller:composer", {
         pluginId: "discourse-lottery-v3",
 
@@ -50,38 +70,96 @@ export default {
 
         actions: {
           openLotteryModal() {
-            console.log("🎲 Opening lottery modal - official way");
+            console.log("🎲 Composer action: openLotteryModal");
             
             if (!canInsertLottery()) {
               alert("当前分类不支持抽奖功能，请在管理后台设置的允许分类中创建主题");
               return;
             }
 
-            // 使用官方推荐的声明式方式
-            this.set('lotteryModalVisible', true);
-            this.set('lotteryModalModel', {
-              onSubmit: handleLotterySubmit
-            });
+            // 尝试使用 modal service
+            try {
+              const modal = this.modal;
+              if (modal && modal.show) {
+                console.log("🎲 Using modal service to show lottery modal");
+                
+                modal.show("modal/lottery-modal", {
+                  model: {
+                    onSubmit: handleLotterySubmit
+                  }
+                }).then((result) => {
+                  console.log("🎲 Modal closed with result:", result);
+                  if (result && result.prize_name) {
+                    handleLotterySubmit(result);
+                  }
+                }).catch((error) => {
+                  console.log("🎲 Modal closed or error:", error);
+                });
+                
+                return;
+              }
+            } catch (e) {
+              console.log("🎲 Modal service failed:", e.message);
+            }
+
+            // 降级到简单表单
+            console.log("🎲 Using fallback form");
+            this.send("showFallbackLotteryForm");
+          },
+
+          showFallbackLotteryForm() {
+            console.log("🎲 Showing fallback lottery form");
+            
+            const prizeName = prompt("📝 请输入活动名称：");
+            if (!prizeName || !prizeName.trim()) return;
+            
+            const prizeDetails = prompt("🎁 请输入奖品说明：");
+            if (!prizeDetails || !prizeDetails.trim()) return;
+            
+            const drawTime = prompt("⏰ 请输入开奖时间 (格式: 2025-08-25T20:00)：");
+            if (!drawTime || !drawTime.trim()) return;
+            
+            // 验证时间
+            try {
+              const testDate = new Date(drawTime);
+              if (isNaN(testDate.getTime()) || testDate <= new Date()) {
+                alert("时间格式无效或不能是过去时间");
+                return;
+              }
+            } catch (e) {
+              alert("时间格式无效");
+              return;
+            }
+            
+            const lotteryData = {
+              prize_name: prizeName.trim(),
+              prize_details: prizeDetails.trim(),
+              draw_time: drawTime.trim(),
+              winners_count: 1,
+              specified_posts: "",
+              min_participants: this.siteSettings?.lottery_min_participants_global || 5,
+              backup_strategy: "continue",
+              additional_notes: ""
+            };
+            
+            handleLotterySubmit(lotteryData);
           },
 
           closeLotteryModal(result) {
-            console.log("🎲 Closing lottery modal with result:", result);
+            console.log("🎲 Composer action: closeLotteryModal with result:", result);
             
-            // 如果有结果数据，处理提交
             if (result && result.prize_name) {
               handleLotterySubmit(result);
             }
             
-            // 隐藏模态框
             this.set('lotteryModalVisible', false);
-            this.set('lotteryModalModel', null);
           }
         }
       });
 
-      // 工具栏按钮
+      // 工具栏按钮 - 使用正确的 sendAction 方式
       api.onToolbarCreate((toolbar) => {
-        console.log("🎲 Adding official lottery button to toolbar");
+        console.log("🎲 Adding correct sendAction lottery button to toolbar");
         
         toolbar.addButton({
           id: "lottery-insert",
@@ -90,20 +168,19 @@ export default {
           title: "创建抽奖活动",
           className: "lottery-toolbar-btn",
           shortcut: "Ctrl+L",
-          perform: () => {
-            console.log("🎲 Official lottery button clicked");
-            const composer = api.container.lookup("controller:composer");
-            if (composer) {
-              composer.send('openLotteryModal');
-            }
+          // 使用 sendAction 而不是 perform
+          sendAction: () => {
+            console.log("🎲 sendAction triggered - sending to d-editor");
+            // 注意：context 这里是 d-editor 组件
+            toolbar.context.send("openLotteryModalFromToolbar");
           },
           condition: () => canInsertLottery()
         });
         
-        console.log("🎲 Official lottery button added to toolbar");
+        console.log("🎲 Correct sendAction lottery button added to toolbar");
       });
 
-      console.log("🎲 Official correct lottery toolbar setup completed");
+      console.log("🎲 Correct sendAction lottery toolbar setup completed");
     });
   },
 };
