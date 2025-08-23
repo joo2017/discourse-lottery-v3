@@ -48,6 +48,15 @@ export default {
         // 添加模态框可见性状态
         showLotteryModal: false,
 
+        // 确保 actions 对象存在
+        init() {
+          this._super(...arguments);
+          console.log("🎲 Composer controller initialized");
+          if (!this.actions) {
+            this.actions = {};
+          }
+        },
+
         actions: {
           // 打开抽奖模态框
           openLotteryModal() {
@@ -95,12 +104,39 @@ export default {
             
             const composer = api.container.lookup("controller:composer");
             if (composer) {
-              // 直接调用 composer 的 action
-              if (composer.actions && composer.actions.openLotteryModal) {
-                composer.actions.openLotteryModal.call(composer);
-              } else {
-                console.error("🎲 No openLotteryModal action found");
+              console.log("🎲 Found composer, checking for actions");
+              console.log("🎲 Composer actions:", Object.keys(composer.actions || {}));
+              
+              // 方法1: 尝试直接调用 send
+              try {
+                if (composer.send) {
+                  console.log("🎲 Using composer.send");
+                  composer.send('openLotteryModal');
+                  return;
+                }
+              } catch (e) {
+                console.log("🎲 composer.send failed:", e.message);
               }
+              
+              // 方法2: 尝试直接调用 action 方法
+              try {
+                if (composer.actions && composer.actions.openLotteryModal) {
+                  console.log("🎲 Using composer.actions.openLotteryModal");
+                  composer.actions.openLotteryModal.call(composer);
+                  return;
+                }
+              } catch (e) {
+                console.log("🎲 composer.actions.openLotteryModal failed:", e.message);
+              }
+              
+              // 方法3: 直接设置状态
+              console.log("🎲 Directly setting showLotteryModal state");
+              if (!canInsertLottery()) {
+                alert("当前分类不支持抽奖功能");
+                return;
+              }
+              composer.set('showLotteryModal', true);
+              
             } else {
               console.error("🎲 No composer found");
             }
