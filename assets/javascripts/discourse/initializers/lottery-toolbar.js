@@ -149,9 +149,17 @@ export default {
           title: "创建抽奖活动",
           className: "lottery-toolbar-btn",
           shortcut: "Ctrl+L",
-          perform: (e, composer) => {
+          perform: () => {
             console.log("🎲 Official API lottery button clicked");
-            composer.send("openLotteryModal");
+            
+            // 直接获取 composer 控制器并调用方法
+            const composer = api.container.lookup("controller:composer");
+            if (composer && composer.send) {
+              composer.send("openLotteryModal");
+            } else {
+              // 直接调用打开模态框的逻辑
+              openLotteryModal();
+            }
           },
           condition: () => {
             return canInsertLottery();
@@ -160,6 +168,90 @@ export default {
         
         console.log("🎲 Official API lottery button added to toolbar");
       });
+
+      // 直接定义打开模态框的函数
+      function openLotteryModal() {
+        console.log("🎲 Opening official API lottery modal directly");
+        
+        if (!canInsertLottery()) {
+          alert("当前分类不支持抽奖功能，请在管理后台设置的允许分类中创建主题");
+          return;
+        }
+
+        // 获取 modal service
+        const modal = api.container.lookup("service:modal");
+        if (!modal) {
+          console.error("🎲 Modal service not found, using fallback");
+          fallbackLotteryForm();
+          return;
+        }
+
+        // 动态导入模态框组件
+        import("../../components/modal/lottery-modal").then((module) => {
+          const LotteryModal = module.default;
+          
+          console.log("🎲 Successfully imported lottery modal component");
+          
+          // 使用官方推荐的 modal service
+          modal.show(LotteryModal, {
+            model: {
+              onSubmit: handleLotterySubmit
+            }
+          }).then((result) => {
+            // 模态框关闭时的回调
+            if (result && result.prize_name) {
+              console.log("🎲 Modal closed with result:", result);
+            }
+          }).catch((error) => {
+            console.log("🎲 Modal closed without result or with error:", error);
+          });
+          
+        }).catch((error) => {
+          console.error("🎲 Failed to load lottery modal component:", error);
+          // 降级到简单提示框
+          fallbackLotteryForm();
+        });
+      }
+
+      // 降级方案函数
+      function fallbackLotteryForm() {
+        console.log("🎲 Using fallback lottery form");
+        
+        const prizeName = prompt("请输入活动名称：");
+        if (!prizeName) return;
+        
+        const prizeDetails = prompt("请输入奖品说明：");
+        if (!prizeDetails) return;
+        
+        const drawTime = prompt("请输入开奖时间 (格式: 2025-08-24T20:00)：");
+        if (!drawTime) return;
+        
+        // 验证时间格式
+        try {
+          const testDate = new Date(drawTime);
+          if (isNaN(testDate.getTime()) || testDate <= new Date()) {
+            alert("时间格式无效或时间不能是过去时间");
+            return;
+          }
+        } catch (e) {
+          alert("时间格式无效");
+          return;
+        }
+        
+        const composer = api.container.lookup("controller:composer");
+        const lotteryData = {
+          prize_name: prizeName,
+          prize_details: prizeDetails,
+          draw_time: drawTime,
+          winners_count: 1,
+          specified_posts: "",
+          min_participants: composer?.siteSettings?.lottery_min_participants_global || 5,
+          backup_strategy: "continue",
+          additional_notes: ""
+        };
+        
+        handleLotterySubmit(lotteryData);
+      }
 
       console.log("🎲 Official API lottery toolbar initializer completed");
     });
