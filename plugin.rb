@@ -9,7 +9,6 @@ enabled_site_setting :lottery_enabled
 # 注册资源文件
 register_asset "stylesheets/lottery-modal.scss"
 register_asset "stylesheets/lottery-form.scss"
-register_asset "stylesheets/toolbar-popup-fix.scss"
 
 # 注册图标
 register_svg_icon "dice"
