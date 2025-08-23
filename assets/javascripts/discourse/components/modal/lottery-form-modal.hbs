@@ -1,6 +1,8 @@
 <DModal
   @title="创建抽奖活动"
   @closeModal={{this.cancel}}
+  @flash={{this.flash}}
+  @flashType={{this.flashType}}
   class="lottery-form-modal"
 >
   <:body>
@@ -12,6 +14,7 @@
       </div>
 
       <div class="lottery-form-body">
+        <!-- 活动名称 -->
         <div class="field-group">
           <label class="field-label required">活动名称</label>
           <input 
@@ -20,9 +23,11 @@
             class="lottery-input"
             placeholder="例如：iPhone 15 Pro 抽奖"
             type="text"
+            maxlength="100"
           />
         </div>
 
+        <!-- 奖品说明 -->
         <div class="field-group">
           <label class="field-label required">奖品说明</label>
           <textarea 
@@ -30,9 +35,12 @@
             {{on "input" this.updatePrizeDetails}}
             class="lottery-textarea"
             placeholder="详细描述奖品内容，如颜色、规格、数量等"
+            maxlength="500"
+            rows="3"
           ></textarea>
         </div>
 
+        <!-- 开奖时间 -->
         <div class="field-group">
           <label class="field-label required">开奖时间</label>
           <input 
@@ -46,6 +54,7 @@
           </div>
         </div>
 
+        <!-- 获奖人数 -->
         <div class="field-group">
           <label class="field-label">获奖人数</label>
           <input 
@@ -53,6 +62,7 @@
             {{on "input" this.updateWinnersCount}}
             type="number"
             min="1"
+            max="100"
             class="lottery-input"
           />
           <div class="field-help">
@@ -60,6 +70,7 @@
           </div>
         </div>
 
+        <!-- 指定楼层 -->
         <div class="field-group">
           <label class="field-label">指定中奖楼层（可选）</label>
           <input 
@@ -74,20 +85,23 @@
           </div>
         </div>
 
+        <!-- 参与门槛 -->
         <div class="field-group">
           <label class="field-label required">参与门槛</label>
           <input 
             value={{this.minParticipants}}
             {{on "input" this.updateMinParticipants}}
             type="number"
-            min={{this.siteSettings.lottery_min_participants_global}}
+            min={{this.globalMinParticipants}}
+            max="1000"
             class="lottery-input"
           />
           <div class="field-help">
-            最少需要多少人参与才能开奖（不能低于全局设置：{{this.siteSettings.lottery_min_participants_global}}）
+            最少需要多少人参与才能开奖（不能低于全局设置：{{this.globalMinParticipants}} 人）
           </div>
         </div>
 
+        <!-- 后备策略 -->
         <div class="field-group">
           <label class="field-label required">后备策略</label>
           <select 
@@ -98,8 +112,12 @@
             <option value="continue">人数不足时继续开奖</option>
             <option value="cancel">人数不足时取消活动</option>
           </select>
+          <div class="field-help">
+            当实际参与人数少于门槛时的处理方式
+          </div>
         </div>
 
+        <!-- 补充说明 -->
         <div class="field-group">
           <label class="field-label">补充说明（可选）</label>
           <textarea 
@@ -107,6 +125,8 @@
             {{on "input" this.updateAdditionalNotes}}
             class="lottery-textarea"
             placeholder="其他需要说明的内容"
+            maxlength="300"
+            rows="2"
           ></textarea>
         </div>
       </div>
@@ -115,15 +135,20 @@
 
   <:footer>
     <button
-      {{on "click" this.insert}}
+      {{on "click" this.submit}}
       disabled={{not this.isValid}}
       class="btn btn-primary"
     >
-      插入抽奖
+      {{#if this.isLoading}}
+        正在处理...
+      {{else}}
+        插入抽奖
+      {{/if}}
     </button>
     <button
       {{on "click" this.cancel}}
       class="btn btn-flat"
+      disabled={{this.isLoading}}
     >
       取消
     </button>
