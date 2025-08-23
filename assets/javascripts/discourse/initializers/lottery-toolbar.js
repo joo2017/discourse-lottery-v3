@@ -190,9 +190,9 @@ export default {
         }
       });
 
-      // 工具栏按钮 - 使用正确的 sendAction 方式
+      // 工具栏按钮 - 提供两种方式：sendAction 和直接调用
       api.onToolbarCreate((toolbar) => {
-        console.log("🎲 Adding correct sendAction lottery button to toolbar");
+        console.log("🎲 Adding correct lottery button to toolbar");
         
         toolbar.addButton({
           id: "lottery-insert",
@@ -201,16 +201,40 @@ export default {
           title: "创建抽奖活动",
           className: "lottery-toolbar-btn",
           shortcut: "Ctrl+L",
-          // 使用 sendAction 而不是 perform
+          // 方法1: 使用 sendAction (推荐的官方方式)
           sendAction: () => {
-            console.log("🎲 sendAction triggered - sending to d-editor");
-            // 注意：context 这里是 d-editor 组件
-            toolbar.context.send("openLotteryModalFromToolbar");
+            console.log("🎲 sendAction triggered - trying d-editor action");
+            try {
+              toolbar.context.send("openLotteryModalFromToolbar");
+            } catch (e) {
+              console.log("🎲 sendAction failed, trying direct approach:", e.message);
+              // 如果 sendAction 失败，直接调用容器方法
+              directOpenLotteryModal();
+            }
+          },
+          // 方法2: 备用的 perform 方法（如果 sendAction 不工作）
+          perform: () => {
+            console.log("🎲 perform triggered - using direct approach");
+            directOpenLotteryModal();
           },
           condition: () => canInsertLottery()
         });
         
-        console.log("🎲 Correct sendAction lottery button added to toolbar");
+        // 直接调用方法（不依赖组件链）
+        function directOpenLotteryModal() {
+          console.log("🎲 Direct approach: opening lottery modal");
+          
+          const composer = api.container.lookup("controller:composer");
+          if (composer) {
+            console.log("🎲 Found composer via direct lookup");
+            composer.send("openLotteryModal");
+          } else {
+            console.error("🎲 Direct lookup failed, showing alert");
+            alert("未找到编辑器控制器，无法打开抽奖模态框");
+          }
+        }
+        
+        console.log("🎲 Lottery button with dual approach added to toolbar");
       });
 
       console.log("🎲 Correct sendAction lottery toolbar setup completed");
