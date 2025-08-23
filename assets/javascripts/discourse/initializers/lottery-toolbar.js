@@ -1,5 +1,4 @@
 import { withPluginApi } from "discourse/lib/plugin-api";
-import LotteryModal from "../components/lottery-modal";
 
 export default {
   name: "lottery-toolbar",
@@ -69,21 +68,24 @@ export default {
           return;
         }
 
-        // 使用新的 modal service API
+        // 使用新的 modal service API，但不导入组件类
         try {
           const modal = api.container.lookup("service:modal");
           if (modal) {
-            console.log("🎲 Using new modal service API");
-            modal.show(LotteryModal, {
+            console.log("🎲 Using modal service with component name");
+            
+            // 使用组件名称字符串而不是导入的类
+            modal.show("lottery-modal", {
               model: {
                 onSubmit: handleLotterySubmit
               }
             });
-            console.log("🎲 New API modal opened successfully");
+            
+            console.log("🎲 Modal opened with component name");
             return;
           }
         } catch (e) {
-          console.log("🎲 New modal API failed:", e.message);
+          console.log("🎲 Modal service failed:", e.message);
         }
 
         console.error("🎲 Modal service not available, using fallback");
