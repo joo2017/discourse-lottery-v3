@@ -1,35 +1,153 @@
 import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
+import { inject as service } from "@ember/service";
 
 export default class LotteryModal extends Component {
+  @service siteSettings;
+  
   @tracked prizeName = "";
   @tracked prizeDetails = "";
   @tracked drawTime = "";
+  @tracked winnersCount = 1;
+  @tracked specifiedPosts = "";
+  @tracked minParticipants = this.siteSettings.lottery_min_participants_global || 5;
+  @tracked backupStrategy = "continue";
+  @tracked additionalNotes = "";
+  @tracked errors = {};
+  @tracked flash = null;
 
-  @action
-  handleInput(ev, name) {
-    this[name] = ev.target.value;
+  constructor() {
+    super(...arguments);
+    this.minParticipants = this.siteSettings.lottery_min_participants_global || 5;
   }
 
-  get canSubmit() {
-    return this.prizeName && this.prizeDetails && this.drawTime;
+  get isValid() {
+    return (
+      this.prizeName.trim() &&
+      this.prizeDetails.trim() &&
+      this.drawTime.trim() &&
+      this.minParticipants >= (this.siteSettings.lottery_min_participants_global || 5)
+    );
+  }
+
+  get lotteryType() {
+    return this.specifiedPosts.trim() ? "指定楼层" : "随机抽取";
   }
 
   @action
-  submit() {
-    if (!this.canSubmit) return;
-    // 回调到 toolbar
-    this.args.model.onSubmit({
-      prize_name: this.prizeName,
-      prize_details: this.prizeDetails,
-      draw_time: this.drawTime
-    });
-    this.args.closeModal();
+  updatePrizeName(event) {
+    this.prizeName = event.target.value;
+    this.clearError('prizeName');
   }
 
   @action
-  close() {
+  updatePrizeDetails(event) {
+    this.prizeDetails = event.target.value;
+    this.clearError('prizeDetails');
+  }
+
+  @action
+  updateDrawTime(event) {
+    this.drawTime = event.target.value;
+    this.clearError('drawTime');
+  }
+
+  @action
+  updateWinnersCount(event) {
+    this.winnersCount = parseInt(event.target.value) || 1;
+  }
+
+  @action
+  updateSpecifiedPosts(event) {
+    this.specifiedPosts = event.target.value;
+  }
+
+  @action
+  updateMinParticipants(event) {
+    this.minParticipants = parseInt(event.target.value) || 1;
+    this.clearError('minParticipants');
+  }
+
+  @action
+  updateBackupStrategy(event) {
+    this.backupStrategy = event.target.value;
+  }
+
+  @action
+  updateAdditionalNotes(event) {
+    this.additionalNotes = event.target.value;
+  }
+
+  @action
+  clearError(field) {
+    if (this.errors[field]) {
+      delete this.errors[field];
+      this.errors = { ...this.errors };
+    }
+    this.flash = null;
+  }
+
+  @action
+  validateAndSubmit() {
+    this.errors = {};
+    this.flash = null;
+
+    // 验证必填字段
+    if (!this.prizeName.trim()) {
+      this.errors.prizeName = "活动名称不能为空";
+    }
+    if (!this.prizeDetails.trim()) {
+      this.errors.prizeDetails = "奖品说明不能为空";
+    }
+    if (!this.drawTime.trim()) {
+      this.errors.drawTime = "开奖时间不能为空";
+    }
+
+    // 验证时间格式
+    if (this.drawTime.trim()) {
+      try {
+        const testDate = new Date(this.drawTime);
+        if (isNaN(testDate.getTime()) || testDate <= new Date()) {
+          this.errors.drawTime = "开奖时间无效或不能是过去时间";
+        }
+      } catch (e) {
+        this.errors.drawTime = "时间格式无效";
+      }
+    }
+
+    // 验证最小参与人数
+    const globalMin = this.siteSettings.lottery_min_participants_global || 5;
+    if (this.minParticipants < globalMin) {
+      this.errors.minParticipants = `参与门槛不能低于${globalMin}人`;
+    }
+
+    // 如果有错误，显示错误并不提交
+    if (Object.keys(this.errors).length > 0) {
+      this.flash = "请检查并修正表单中的错误";
+      return;
+    }
+
+    // 创建抽奖数据
+    const lotteryData = {
+      prize_name: this.prizeName.trim(),
+      prize_details: this.prizeDetails.trim(),
+      draw_time: this.drawTime.trim(),
+      winners_count: this.winnersCount,
+      specified_posts: this.specifiedPosts.trim(),
+      min_participants: this.minParticipants,
+      backup_strategy: this.backupStrategy,
+      additional_notes: this.additionalNotes.trim()
+    };
+
+    console.log("🎲 Lottery form submitted with data:", lotteryData);
+
+    // 关闭模态框并传递数据
+    this.args.closeModal(lotteryData);
+  }
+
+  @action
+  closeModal() {
     this.args.closeModal();
   }
 }
