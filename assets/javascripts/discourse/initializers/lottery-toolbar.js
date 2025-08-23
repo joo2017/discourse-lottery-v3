@@ -1,10 +1,11 @@
 import { withPluginApi } from "discourse/lib/plugin-api";
+import LotteryModal from "../components/lottery-modal";
 
 export default {
   name: "lottery-toolbar",
   initialize() {
     withPluginApi("1.0.0", (api) => {
-      console.log("🎲 Modern lottery toolbar initializer starting...");
+      console.log("🎲 New API lottery toolbar initializer starting...");
       
       // 检查分类是否允许抽奖的辅助函数
       function canInsertLottery() {
@@ -57,59 +58,35 @@ export default {
         composer.set("model.reply", currentText + placeholder);
         
         console.log("🎲 Inserted lottery placeholder into composer");
-        
-        // 显示成功消息
-        const appEvents = api.container.lookup("service:app-events");
-        if (appEvents) {
-          appEvents.trigger("d-modal:notify", {
-            type: "success",
-            message: "抽奖信息已插入编辑器，请填写主题标题并发布"
-          });
-        }
       }
 
       // 打开模态框的函数
       function openLotteryModal() {
-        console.log("🎲 Opening lottery modal");
+        console.log("🎲 Opening new API lottery modal");
         
         if (!canInsertLottery()) {
           alert("当前分类不支持抽奖功能，请在管理后台设置的允许分类中创建主题");
           return;
         }
 
-        // 尝试使用传统的 showModal API
-        try {
-          const appRoute = api.container.lookup("route:application");
-          if (appRoute) {
-            appRoute.send("showModal", "lottery-form", {
-              model: {
-                onSubmit: handleLotterySubmit
-              }
-            });
-            console.log("🎲 Modal opened successfully");
-            return;
-          }
-        } catch (e) {
-          console.log("🎲 Traditional modal failed:", e.message);
-        }
-
-        // 尝试现代的 modal service
+        // 使用新的 modal service API
         try {
           const modal = api.container.lookup("service:modal");
           if (modal) {
-            modal.show("lottery-form", {
+            console.log("🎲 Using new modal service API");
+            modal.show(LotteryModal, {
               model: {
                 onSubmit: handleLotterySubmit
               }
             });
-            console.log("🎲 Modern modal opened successfully");
+            console.log("🎲 New API modal opened successfully");
             return;
           }
         } catch (e) {
-          console.log("🎲 Modern modal failed:", e.message);
+          console.log("🎲 New modal API failed:", e.message);
         }
 
-        console.error("🎲 All modal methods failed, using fallback");
+        console.error("🎲 Modal service not available, using fallback");
         // 降级到简单提示框
         fallbackToPrompts();
       }
@@ -156,7 +133,7 @@ export default {
 
       // 使用工具栏按钮
       api.onToolbarCreate((toolbar) => {
-        console.log("🎲 Toolbar created, adding modern lottery button");
+        console.log("🎲 Toolbar created, adding new API lottery button");
         
         toolbar.addButton({
           id: "lottery-insert",
@@ -166,23 +143,15 @@ export default {
           className: "lottery-toolbar-btn",
           shortcut: "Ctrl+L",
           perform: () => {
-            console.log("🎲 Modern lottery button clicked");
+            console.log("🎲 New API lottery button clicked");
             openLotteryModal();
           }
         });
         
-        console.log("🎲 Modern lottery button added to toolbar");
+        console.log("🎲 New API lottery button added to toolbar");
       });
 
-      // 注册模态框名称（如果需要）
-      try {
-        // 这里可以添加额外的模态框注册逻辑
-        console.log("🎲 Modal components should be auto-discovered");
-      } catch (e) {
-        console.log("🎲 Modal registration not needed:", e.message);
-      }
-
-      console.log("🎲 Modern lottery toolbar initializer completed");
+      console.log("🎲 New API lottery toolbar initializer completed");
     });
   },
 };
