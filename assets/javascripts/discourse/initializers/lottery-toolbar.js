@@ -132,7 +132,7 @@ export default {
         }
       });
 
-      // 直接用全局 controller，完全不用 context.send
+      // 仅在编辑器打开&当前分类允许抽奖时显示按钮
       api.onToolbarCreate((toolbar) => {
         console.log("🎲 Adding lottery button to toolbar");
         toolbar.addButton({
@@ -145,13 +145,19 @@ export default {
           sendAction: () => {
             console.log("🎲 lottery toolbar sendAction fired");
             const composer = api.container.lookup("controller:composer");
-            if (composer) {
+            console.log("🎲 composer lookup result:", composer);
+            if (composer && typeof composer.send === "function") {
               composer.send("openLotteryModal");
+            } else if (!composer) {
+              alert("请先新建主题或回复后，再使用抽奖按钮。");
             } else {
-              alert("未找到编辑器控制器（composer），请刷新页面后重试。");
+              alert("composer 控制器不可用，请刷新页面后重试。");
             }
           },
-          condition: () => canInsertLottery()
+          condition: () => {
+            const composer = api.container.lookup("controller:composer");
+            return !!composer && canInsertLottery();
+          }
         });
       });
 
