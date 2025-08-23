@@ -131,24 +131,28 @@ export default {
         handleLotterySubmit(lotteryData);
       }
 
-      // 使用工具栏按钮
+      // 使用工具栏按钮 - 直接添加到工具栏，不使用弹出菜单
       api.onToolbarCreate((toolbar) => {
-        console.log("🎲 Toolbar created, adding new API lottery button");
+        console.log("🎲 Toolbar created, adding independent lottery button");
         
         toolbar.addButton({
           id: "lottery-insert",
-          group: "extras",
+          group: "extras", // 添加到额外工具组
           icon: "dice",
-          title: "创建抽奖",
+          title: "创建抽奖活动",
           className: "lottery-toolbar-btn",
           shortcut: "Ctrl+L",
           perform: () => {
-            console.log("🎲 New API lottery button clicked");
+            console.log("🎲 Independent lottery button clicked");
             openLotteryModal();
+          },
+          condition: () => {
+            // 只在允许的分类中显示按钮
+            return canInsertLottery();
           }
         });
         
-        console.log("🎲 New API lottery button added to toolbar");
+        console.log("🎲 Independent lottery button added to toolbar");
       });
 
       console.log("🎲 New API lottery toolbar initializer completed");
