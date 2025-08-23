@@ -1,6 +1,0 @@
-{{! 在 composer 中声明式地渲染抽奖模态框 }}
-{{#if @outletArgs.model.showLotteryModal}}
-  <Modal::LotteryModal
-    @closeModal={{action @outletArgs.model.closeLotteryModal}}
-  />
-{{/if}}
