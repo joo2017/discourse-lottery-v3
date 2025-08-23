@@ -3,9 +3,8 @@ import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
 import { inject as service } from "@ember/service";
 
-export default class LotteryFormModal extends Component {
+export default class LotteryModal extends Component {
   @service siteSettings;
-  @service modal;
   
   @tracked prizeName = "";
   @tracked prizeDetails = "";
@@ -126,12 +125,12 @@ export default class LotteryFormModal extends Component {
 
     console.log("🎲 Lottery form submitted with data:", lotteryData);
 
-    // 调用父组件的回调
+    // 调用回调函数
     if (this.args.model?.onSubmit) {
       this.args.model.onSubmit(lotteryData);
     }
 
     // 关闭模态框
-    this.modal.close();
+    this.args.closeModal();
   }
 }
