@@ -44,6 +44,38 @@
           </div>
         </div>
 
+        {{! 奖品图片上传 }}
+        <div class="control-group">
+          <label class="control-label">奖品图片（可选）</label>
+          <div class="controls">
+            <div class="lottery-image-upload">
+              <input 
+                type="file"
+                accept="image/*"
+                {{on "change" this.handleImageUpload}}
+                class="lottery-file-input"
+                id="lottery-image-upload"
+              />
+              <label for="lottery-image-upload" class="lottery-upload-btn">
+                {{#if this.isImageUploading}}
+                  上传中...
+                {{else if this.prizeImagePreview}}
+                  重新选择图片
+                {{else}}
+                  选择图片
+                {{/if}}
+              </label>
+              {{#if this.prizeImagePreview}}
+                <div class="lottery-image-preview">
+                  <img src={{this.prizeImagePreview}} alt="奖品图片预览" />
+                  <button type="button" {{on "click" this.removeImage}} class="remove-image-btn">×</button>
+                </div>
+              {{/if}}
+            </div>
+            <div class="help-text">支持 JPG、PNG、GIF 格式，文件大小不超过 3MB</div>
+          </div>
+        </div>
+
         {{! 开奖时间 }}
         <div class="control-group">
           <label class="control-label">开奖时间 <span class="required">*</span></label>
