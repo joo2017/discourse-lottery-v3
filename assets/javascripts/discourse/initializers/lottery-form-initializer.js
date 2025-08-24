@@ -6,53 +6,80 @@ export default {
     withPluginApi("1.0.0", (api) => {
       console.log("🎲 Lottery form initializer loaded");
       
-      // 官方推荐：修改 topic 模型支持 custom_fields
-      api.modifyClass("model:topic", {
-        pluginId: "discourse-lottery-v3",
-        
-        custom_fields: {},
-        
-        asJSON() {
-          const json = this._super(...arguments);
-          json.custom_fields = this.custom_fields;
-          return json;
-        }
-      });
+      // 不再修改 createPost，不使用 window 缓存
+      // 直接在 Modal submit 时设置 composer.customFields
       
-      // 官方推荐：修改 createPost 方法传递数据到 opts
-      api.modifyClass("model:composer", {
-        pluginId: "discourse-lottery-v3",
+      // 提供全局方法供 Modal 调用
+      window.setLotteryToComposer = function(lotteryData) {
+        console.log("🎲 Setting lottery data to composer.customFields");
+        console.log("🎲 Data:", lotteryData);
         
-        createPost(opts) {
-          console.log("🎲 createPost called");
+        try {
+          const composer = api.container.lookup("service:composer");
           
-          // 检查是否有抽奖数据并且是新话题
-          if (window.lotteryFormDataCache && this.get('creatingTopic')) {
-            console.log("🎲 Found lottery data for new topic");
-            const formData = window.lotteryFormDataCache;
-            
-            if (formData.prize_name && formData.prize_details && formData.draw_time) {
-              console.log("🎲 Valid lottery data, adding to opts");
-              
-              // 官方推荐：通过 opts 传递数据给 :topic_created 事件
-              if (!opts) {
-                opts = {};
-              }
-              
-              opts.lottery_data = formData;
-              
-              console.log("🎲 Added lottery_data to opts:", opts.lottery_data);
-              
-              // 清理缓存
-              window.lotteryFormDataCache = null;
-              console.log("🎲 Cache cleared");
-            }
+          if (!composer) {
+            console.error("🎲 ❌ Could not get composer service");
+            return false;
           }
           
-          // 调用原始方法
-          return this._super(opts);
+          // 官方推荐：直接设置到 composer.customFields
+          if (!composer.customFields) {
+            composer.customFields = {};
+          }
+          
+          composer.customFields.lottery = {
+            prize_name: lotteryData.prize_name,
+            prize_details: lotteryData.prize_details,
+            draw_time: lotteryData.draw_time,
+            winners_count: lotteryData.winners_count,
+            specified_posts: lotteryData.specified_posts || "",
+            min_participants: lotteryData.min_participants,
+            backup_strategy: lotteryData.backup_strategy,
+            additional_notes: lotteryData.additional_notes || "",
+            prize_image: lotteryData.prize_image || ""
+          };
+          
+          console.log("🎲 ✅ Set composer.customFields.lottery:", composer.customFields.lottery);
+          
+          // 同时插入 BBCode 到编辑器（用于显示）
+          const placeholder = buildLotteryPlaceholder(lotteryData);
+          const currentText = composer.model.reply || "";
+          composer.model.reply = currentText + placeholder;
+          
+          console.log("🎲 ✅ Also inserted BBCode placeholder");
+          
+          return true;
+          
+        } catch (error) {
+          console.error("🎲 ❌ Error setting lottery data:", error);
+          return false;
         }
-      });
+      };
+      
+      // 辅助函数：构建占位符
+      function buildLotteryPlaceholder(data) {
+        let placeholder = `\n[lottery]\n`;
+        placeholder += `活动名称：${data.prize_name}\n`;
+        placeholder += `奖品说明：${data.prize_details}\n`;
+        placeholder += `开奖时间：${data.draw_time}\n`;
+        
+        if (data.specified_posts && data.specified_posts.trim()) {
+          placeholder += `抽奖方式：指定楼层\n`;
+          placeholder += `指定楼层：${data.specified_posts}\n`;
+        } else {
+          placeholder += `抽奖方式：随机抽取\n`;
+          placeholder += `获奖人数：${data.winners_count}\n`;
+        }
+        
+        placeholder += `参与门槛：${data.min_participants}人\n`;
+        
+        if (data.additional_notes && data.additional_notes.trim()) {
+          placeholder += `补充说明：${data.additional_notes}\n`;
+        }
+        
+        placeholder += `[/lottery]\n\n`;
+        return placeholder;
+      }
       
       // 监听话题创建成功
       api.onAppEvent("topic:created", (topicData) => {
@@ -62,7 +89,7 @@ export default {
         setTimeout(() => {
           console.log("🎲 Refreshing to show lottery display");
           window.location.reload();
-        }, 4000);
+        }, 3000);
       });
     });
   },
