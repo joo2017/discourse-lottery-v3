@@ -1,92 +1,69 @@
-# name: discourse-lottery-v3
-# about: A comprehensive and robust lottery plugin for Discourse, based on the V3 blueprint.
-# version: 0.1
-# authors: [Your Name]
-# url: [Your GitHub Repo URL]
+import { withPluginApi } from "discourse/lib/plugin-api";
 
-enabled_site_setting :lottery_enabled
-
-# 注册资源文件
-register_asset "stylesheets/lottery-modal.scss"
-register_asset "stylesheets/lottery-form.scss"
-register_asset "stylesheets/lottery-display.scss"
-
-# 注册图标
-register_svg_icon "dice"
-
-# 添加路由
-Discourse::Application.routes.draw do
-  post "/admin/plugins/lottery/create" => "admin/plugins/lottery#create"
-end
-
-after_initialize do
-  Rails.logger.info "LotteryPlugin: Starting initialization"
-  
-  # 加载模型和服务
-  begin
-    require_relative 'lib/lottery'
-    Rails.logger.info "LotteryPlugin: Loaded lottery model"
-  rescue => e
-    Rails.logger.error "LotteryPlugin: Failed to load lottery model: #{e.message}"
-  end
-  
-  begin
-    require_relative 'lib/lottery_creator'
-    Rails.logger.info "LotteryPlugin: Loaded lottery creator"
-  rescue => e
-    Rails.logger.error "LotteryPlugin: Failed to load lottery creator: #{e.message}"
-  end
-  
-  # 定义模型关联
-  if defined?(Topic)
-    Topic.class_eval do
-      has_many :lotteries, dependent: :destroy
-    end
-    Rails.logger.info "LotteryPlugin: Added lotteries association to Topic"
-  end
-  
-  # 创建控制器
-  class ::Admin::Plugins::LotteryController < ::Admin::AdminController
-    def create
-      Rails.logger.info "LotteryController: Received lottery creation request"
-      Rails.logger.info "LotteryController: Params: #{params}"
+export default {
+  name: "lottery-form-initializer",
+  initialize() {
+    withPluginApi("1.0.0", (api) => {
+      console.log("🎲 Lottery form initializer loaded");
       
-      topic_id = params[:topic_id]
-      lottery_data = params[:lottery_data]
-      
-      unless topic_id && lottery_data
-        render json: { error: "Missing required parameters" }, status: 400
-        return
-      end
-      
-      begin
-        topic = Topic.find(topic_id)
-        user = current_user
+      // 官方推荐：修改 topic 模型支持 custom_fields
+      api.modifyClass("model:topic", {
+        pluginId: "discourse-lottery-v3",
         
-        Rails.logger.info "LotteryController: Creating lottery for topic #{topic_id}"
-        Rails.logger.info "LotteryController: Data: #{lottery_data}"
+        custom_fields: {},
         
-        # 直接创建抽奖
-        lottery = LotteryCreator.new(topic, lottery_data, user).create
-        
-        Rails.logger.info "LotteryController: Successfully created lottery #{lottery.id}"
-        
-        render json: { 
-          success: true, 
-          lottery_id: lottery.id,
-          message: "抽奖创建成功"
+        asJSON() {
+          const json = this._super(...arguments);
+          json.custom_fields = this.custom_fields;
+          return json;
         }
+      });
+      
+      // 官方推荐：修改 createPost 方法传递数据到 opts
+      api.modifyClass("model:composer", {
+        pluginId: "discourse-lottery-v3",
         
-      rescue => e
-        Rails.logger.error "LotteryController: Error: #{e.message}"
-        Rails.logger.error "LotteryController: Backtrace: #{e.backtrace.join("\n")}"
+        createPost(opts) {
+          console.log("🎲 createPost called");
+          
+          // 检查是否有抽奖数据并且是新话题
+          if (window.lotteryFormDataCache && this.get('creatingTopic')) {
+            console.log("🎲 Found lottery data for new topic");
+            const formData = window.lotteryFormDataCache;
+            
+            if (formData.prize_name && formData.prize_details && formData.draw_time) {
+              console.log("🎲 Valid lottery data, adding to opts");
+              
+              // 官方推荐：通过 opts 传递数据给 :topic_created 事件
+              if (!opts) {
+                opts = {};
+              }
+              
+              opts.lottery_data = formData;
+              
+              console.log("🎲 Added lottery_data to opts:", opts.lottery_data);
+              
+              // 清理缓存
+              window.lotteryFormDataCache = null;
+              console.log("🎲 Cache cleared");
+            }
+          }
+          
+          // 调用原始方法
+          return this._super(opts);
+        }
+      });
+      
+      // 监听话题创建成功
+      api.onAppEvent("topic:created", (topicData) => {
+        console.log("🎲 Topic created successfully:", topicData.id);
         
-        render json: { 
-          error: "创建失败: #{e.message}" 
-        }, status: 500
-      end
-    end
-  end
-  
-  Rails.logger.info "LotteryPlugin: Initialization completed"
-end
+        // 延迟刷新显示结果
+        setTimeout(() => {
+          console.log("🎲 Refreshing to show lottery display");
+          window.location.reload();
+        }, 4000);
+      });
+    });
+  },
+};
