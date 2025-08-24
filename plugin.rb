@@ -9,6 +9,7 @@ enabled_site_setting :lottery_enabled
 # 注册资源文件
 register_asset "stylesheets/lottery-modal.scss"
 register_asset "stylesheets/lottery-form.scss"
+register_asset "stylesheets/lottery-display.scss"  # 添加这行
 
 # 注册图标
 register_svg_icon "dice"
@@ -41,38 +42,49 @@ after_initialize do
     Rails.logger.error "LotteryPlugin: Topic class not found"
   end
   
-  # 监听话题创建事件 - 只使用 custom_fields
+  # 监听话题创建事件 - 使用简化的 custom_fields
   DiscourseEvent.on(:post_created) do |post, opts, user|
     next unless SiteSetting.lottery_enabled
     next unless post.post_number == 1  # 只处理主楼层
     
     topic = post.topic
-    Rails.logger.info "LotteryPlugin: Post created for topic #{topic.id}, checking custom_fields"
-    Rails.logger.info "LotteryPlugin: Topic custom_fields: #{topic.custom_fields.inspect}"
+    Rails.logger.info "LotteryPlugin: Post created for topic #{topic.id}"
+    Rails.logger.info "LotteryPlugin: Custom fields keys: #{topic.custom_fields.keys}"
     
-    # 只检查 custom_fields，不用其他方法
-    lottery_data = topic.custom_fields['lottery']
-    if lottery_data.present?
-      Rails.logger.info "LotteryPlugin: ✅ Found lottery data in custom_fields"
-      Rails.logger.info "LotteryPlugin: Raw data: #{lottery_data}"
+    # 检查是否是抽奖话题
+    if topic.custom_fields['has_lottery'] == 'true'
+      Rails.logger.info "LotteryPlugin: ✅ Found lottery topic"
       
-      begin
-        parsed_data = JSON.parse(lottery_data)
-        Rails.logger.info "LotteryPlugin: ✅ Successfully parsed data: #{parsed_data.inspect}"
+      # 重建数据结构
+      lottery_data = {
+        'prize_name' => topic.custom_fields['lottery_name'],
+        'prize_details' => topic.custom_fields['lottery_details'],
+        'draw_time' => topic.custom_fields['lottery_time'],
+        'winners_count' => topic.custom_fields['lottery_winners'].to_i,
+        'min_participants' => topic.custom_fields['lottery_min'].to_i,
+        'backup_strategy' => topic.custom_fields['lottery_strategy'],
+        'additional_notes' => topic.custom_fields['lottery_notes'],
+        'specified_posts' => topic.custom_fields['lottery_posts']
+      }
+      
+      Rails.logger.info "LotteryPlugin: Reconstructed data: #{lottery_data.inspect}"
+      
+      # 验证必要字段
+      if lottery_data['prize_name'].present? && lottery_data['prize_details'].present?
+        Rails.logger.info "LotteryPlugin: ✅ Valid lottery data, creating lottery"
         
-        # 延迟执行，确保话题创建完成
         Jobs.enqueue_in(5.seconds, :create_lottery, {
           topic_id: topic.id,
-          lottery_data: parsed_data,
+          lottery_data: lottery_data,
           user_id: user.id
         })
         
         Rails.logger.info "LotteryPlugin: ✅ Enqueued lottery creation job"
-      rescue => e
-        Rails.logger.error "LotteryPlugin: ❌ Failed to parse lottery data: #{e.message}"
+      else
+        Rails.logger.warn "LotteryPlugin: ❌ Invalid lottery data, missing required fields"
       end
     else
-      Rails.logger.info "LotteryPlugin: ❌ No lottery data found in custom_fields"
+      Rails.logger.info "LotteryPlugin: Not a lottery topic"
     end
   end
   
