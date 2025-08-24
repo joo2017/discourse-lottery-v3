@@ -33,6 +33,7 @@ class LotteryCreator
 
   def validate_data!
     Rails.logger.info "LotteryCreator: Validating data"
+    Rails.logger.info "LotteryCreator: Received data structure: #{@data.class} - #{@data.inspect}"
     
     required_fields = ['prize_name', 'prize_details', 'draw_time']
     missing_fields = required_fields.select { |field| @data[field].blank? }
@@ -41,11 +42,16 @@ class LotteryCreator
       raise "缺少必填字段: #{missing_fields.join(', ')}"
     end
 
-    # 验证最小参与人数
-    global_min = SiteSetting.lottery_min_participants_global
+    # 修复：确保正确获取参与门槛值
     min_participants = @data['min_participants'].to_i
+    global_min = SiteSetting.lottery_min_participants_global.to_i
+    
+    Rails.logger.info "LotteryCreator: min_participants from data: #{min_participants}"
+    Rails.logger.info "LotteryCreator: global_min from settings: #{global_min}"
+    
+    # 修复验证逻辑：应该是 < 而不是 <=
     if min_participants < global_min
-      raise "参与门槛不能低于#{global_min}人"
+      raise "参与门槛不能低于#{global_min}人，当前设置为#{min_participants}人"
     end
 
     # 验证开奖时间
@@ -126,7 +132,7 @@ class LotteryCreator
 
   def build_lottery_info_text(lottery)
     info = <<~TEXT
-      ## 🎲 抽奖活动信息
+      ## 🎲 抽奖活动已创建
 
       **活动名称：** #{lottery.prize_name}
       **奖品说明：** #{lottery.prize_details}
@@ -146,7 +152,8 @@ class LotteryCreator
 
     info += "---\n\n"
     info += "💡 **参与方式：** 在本话题下回复即可参与抽奖\n\n"
-    info += "🏷️ **活动状态：** 进行中"
+    info += "🏷️ **活动状态：** 进行中\n\n"
+    info += "✅ **抽奖记录已创建，系统将在开奖时间自动执行抽奖！**"
 
     info
   end
