@@ -89,6 +89,7 @@ async submit() {
 }
 
 // 新增：构建完整占位符的辅助方法
+@action
 buildLotteryPlaceholder(data) {
   let placeholder = `\n[lottery]\n`;
   
