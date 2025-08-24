@@ -9,13 +9,26 @@ enabled_site_setting :lottery_enabled
 # 注册资源文件
 register_asset "stylesheets/lottery-modal.scss"
 register_asset "stylesheets/lottery-form.scss"
-register_asset "stylesheets/lottery-display.scss"  # 添加这行
+register_asset "stylesheets/lottery-display.scss"
 
 # 注册图标
 register_svg_icon "dice"
 
 after_initialize do
   Rails.logger.info "LotteryPlugin: Starting initialization"
+  
+  # 官方推荐：注册 custom_field 类型
+  Topic.register_custom_field_type('has_lottery', :boolean)
+  Topic.register_custom_field_type('lottery_name', :string)
+  Topic.register_custom_field_type('lottery_details', :string)
+  Topic.register_custom_field_type('lottery_time', :string)
+  Topic.register_custom_field_type('lottery_winners', :integer)
+  Topic.register_custom_field_type('lottery_min', :integer)
+  Topic.register_custom_field_type('lottery_strategy', :string)
+  Topic.register_custom_field_type('lottery_notes', :string)
+  Topic.register_custom_field_type('lottery_posts', :string)
+  
+  Rails.logger.info "LotteryPlugin: Registered custom field types"
   
   # 加载模型和服务
   begin
@@ -42,17 +55,22 @@ after_initialize do
     Rails.logger.error "LotteryPlugin: Topic class not found"
   end
   
-  # 监听话题创建事件 - 使用简化的 custom_fields
+  # 官方推荐：添加到 serializer 以便客户端访问
+  add_to_serializer(:topic_view, :custom_fields) do
+    object.topic.custom_fields
+  end
+  
+  # 监听话题创建事件
   DiscourseEvent.on(:post_created) do |post, opts, user|
     next unless SiteSetting.lottery_enabled
     next unless post.post_number == 1  # 只处理主楼层
     
     topic = post.topic
     Rails.logger.info "LotteryPlugin: Post created for topic #{topic.id}"
-    Rails.logger.info "LotteryPlugin: Custom fields keys: #{topic.custom_fields.keys}"
+    Rails.logger.info "LotteryPlugin: Custom fields: #{topic.custom_fields.inspect}"
     
     # 检查是否是抽奖话题
-    if topic.custom_fields['has_lottery'] == 'true'
+    if topic.custom_fields['has_lottery']
       Rails.logger.info "LotteryPlugin: ✅ Found lottery topic"
       
       # 重建数据结构
