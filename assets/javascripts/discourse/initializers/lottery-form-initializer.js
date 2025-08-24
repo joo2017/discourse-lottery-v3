@@ -6,69 +6,58 @@ export default {
     withPluginApi("1.0.0", (api) => {
       console.log("🎲 Lottery form initializer loaded");
       
-      // 关键修复：在 composer 创建时就设置钩子
-      api.modifyClass("model:composer", {
-        pluginId: "discourse-lottery-v3",
+      // 监听话题创建成功事件
+      api.onAppEvent("topic:created", async (topicData) => {
+        console.log("🎲 Topic created successfully:", topicData.id);
         
-        // 重写 save 方法，在保存前注入数据
-        save(opts) {
-          console.log("🎲 Composer model save called");
-          console.log("🎲 Current custom_fields:", this.custom_fields);
+        // 检查是否有待处理的抽奖数据
+        if (window.lotteryFormDataCache) {
+          console.log("🎲 Found lottery cache data, updating topic custom_fields");
+          const formData = window.lotteryFormDataCache;
           
-          // 检查缓存数据
-          if (window.lotteryFormDataCache) {
-            console.log("🎲 Found lottery cache data");
-            const formData = window.lotteryFormDataCache;
+          if (formData.prize_name && formData.prize_details && formData.draw_time) {
+            console.log("🎲 Valid lottery data, updating via official API");
             
-            if (formData.prize_name && formData.prize_details && formData.draw_time) {
-              console.log("🎲 Valid data, injecting into custom_fields");
+            try {
+              // 使用 Discourse 官方的 Topic API 更新 custom_fields
+              const response = await fetch(`/t/${topicData.id}.json`, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                },
+                body: JSON.stringify({
+                  topic: {
+                    custom_fields: {
+                      lottery_name: formData.prize_name,
+                      lottery_details: formData.prize_details,
+                      lottery_time: formData.draw_time,
+                      lottery_winners: formData.winners_count.toString(),
+                      lottery_min: formData.min_participants.toString(),
+                      lottery_strategy: formData.backup_strategy,
+                      lottery_notes: formData.additional_notes || "",
+                      lottery_posts: formData.specified_posts || "",
+                      has_lottery: "true"
+                    }
+                  }
+                })
+              });
               
-              // 确保 custom_fields 存在
-              if (!this.custom_fields) {
-                this.custom_fields = {};
+              if (response.ok) {
+                console.log("🎲 ✅ Successfully updated topic custom_fields");
+                
+                // 清理缓存
+                window.lotteryFormDataCache = null;
+                console.log("🎲 Cache cleared");
+                
+              } else {
+                console.log("🎲 ❌ Failed to update custom_fields:", response.status);
               }
               
-              // 直接设置数据
-              this.custom_fields.lottery = JSON.stringify(formData);
-              
-              console.log("🎲 Injected lottery data:", this.custom_fields.lottery);
-              console.log("🎲 Final custom_fields:", this.custom_fields);
-              
-              // 清理缓存
-              window.lotteryFormDataCache = null;
-              console.log("🎲 Cache cleared");
+            } catch (error) {
+              console.log("🎲 ❌ Error updating custom_fields:", error);
             }
           }
-          
-          // 调用原始 save 方法
-          return this._super(opts);
-        }
-      });
-      
-      // 备用方法：通过控制器也设置一遍
-      api.modifyClass("controller:composer", {
-        pluginId: "discourse-lottery-v3",
-        
-        save(options) {
-          console.log("🎲 Controller save called");
-          
-          if (window.lotteryFormDataCache) {
-            const formData = window.lotteryFormDataCache;
-            
-            if (formData.prize_name && formData.prize_details && formData.draw_time) {
-              const model = this.get("model");
-              
-              if (!model.custom_fields) {
-                model.custom_fields = {};
-              }
-              
-              model.custom_fields.lottery = JSON.stringify(formData);
-              
-              console.log("🎲 Backup: Set data via controller");
-            }
-          }
-          
-          return this._super(options);
         }
       });
     });
