@@ -1,179 +1,71 @@
-.lottery-form-modal {
-  .modal-inner-container {
-    min-width: 600px;
-    max-width: 700px;
-  }
+// 图片上传相关样式 - 添加到 lottery-modal.scss 文件末尾
 
-  .lottery-form-content {
-    max-height: 70vh;
-    overflow-y: auto;
-    padding: 0 5px;
+.lottery-image-upload {
+  position: relative;
+  
+  .lottery-file-input {
+    display: none;
   }
-
-  .form-group {
-    margin-bottom: 20px;
-    
-    &:last-child {
-      margin-bottom: 10px;
-    }
-  }
-
-  .form-label {
-    display: block;
-    font-weight: 600;
-    color: var(--primary-high);
-    margin-bottom: 8px;
+  
+  .lottery-upload-btn {
+    display: inline-block;
+    padding: 10px 20px;
+    background: var(--tertiary);
+    color: var(--secondary);
+    border-radius: 4px;
+    cursor: pointer;
     font-size: 14px;
-
-    &.required::after {
-      content: " *";
-      color: var(--danger);
-      font-weight: bold;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+    border: none;
+    
+    &:hover {
+      background: var(--tertiary-hover);
+    }
+    
+    &:active {
+      transform: translateY(1px);
     }
   }
-
-  .form-input,
-  .form-textarea,
-  .form-select {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 10px 12px;
+  
+  .lottery-image-preview {
+    margin-top: 12px;
+    position: relative;
+    display: inline-block;
     border: 2px solid var(--primary-low);
     border-radius: 6px;
-    font-size: 14px;
-    font-family: inherit;
+    overflow: hidden;
     background: var(--secondary);
-    color: var(--primary);
-    transition: all 0.2s ease;
-
-    &:focus {
-      outline: none;
-      border-color: var(--tertiary);
-      box-shadow: 0 0 0 3px rgba(var(--tertiary-rgb), 0.1);
+    
+    img {
+      max-width: 200px;
+      max-height: 150px;
+      width: auto;
+      height: auto;
+      display: block;
     }
-
-    &.error {
-      border-color: var(--danger);
+    
+    .remove-image-btn {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      width: 24px;
+      height: 24px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      line-height: 1;
+      transition: background-color 0.2s ease;
       
-      &:focus {
-        border-color: var(--danger);
-        box-shadow: 0 0 0 3px rgba(var(--danger-rgb), 0.1);
+      &:hover {
+        background: rgba(220, 53, 69, 0.8);
       }
-    }
-
-    &::placeholder {
-      color: var(--primary-medium);
-    }
-  }
-
-  .form-textarea {
-    resize: vertical;
-    min-height: 80px;
-    font-family: inherit;
-  }
-
-  .form-select {
-    cursor: pointer;
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
-    background-position: right 12px center;
-    background-repeat: no-repeat;
-    background-size: 16px;
-    padding-right: 40px;
-    appearance: none;
-  }
-
-  .form-help {
-    font-size: 12px;
-    color: var(--primary-medium);
-    margin-top: 6px;
-    line-height: 1.4;
-    font-style: italic;
-  }
-
-  .form-error {
-    font-size: 12px;
-    color: var(--danger);
-    margin-top: 6px;
-    font-weight: 500;
-    
-    &::before {
-      content: "⚠ ";
-    }
-  }
-
-  .lottery-type-indicator {
-    padding: 8px 12px;
-    background: var(--highlight-bg);
-    border: 1px solid var(--primary-low);
-    border-radius: 4px;
-    font-size: 13px;
-    color: var(--primary-high);
-    
-    strong {
-      color: var(--tertiary);
-      font-weight: 600;
-    }
-  }
-
-  // 响应式设计
-  @media (max-width: 768px) {
-    .modal-inner-container {
-      min-width: auto;
-      max-width: 95vw;
-      margin: 20px;
-    }
-
-    .lottery-form-content {
-      max-height: 60vh;
-    }
-
-    .form-input,
-    .form-textarea,
-    .form-select {
-      font-size: 16px; // 防止iOS缩放
-    }
-  }
-
-  // 暗色主题支持
-  .discourse-dark & {
-    .form-input,
-    .form-textarea,
-    .form-select {
-      background: var(--secondary);
-      border-color: var(--primary-low);
-      color: var(--primary);
-    }
-
-    .lottery-type-indicator {
-      background: var(--primary-very-low);
-      border-color: var(--primary-low);
-    }
-  }
-
-  // 动画效果
-  .form-input,
-  .form-textarea,
-  .form-select {
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
-
-    &:focus {
-      transform: translateY(-1px);
-    }
-  }
-
-  // 成功状态（可选）
-  .form-success {
-    padding: 12px;
-    background: var(--success-low);
-    border: 1px solid var(--success);
-    border-radius: 4px;
-    color: var(--success-high);
-    font-size: 14px;
-    margin-bottom: 15px;
-    
-    &::before {
-      content: "✓ ";
-      font-weight: bold;
     }
   }
 }
