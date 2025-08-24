@@ -1,105 +1,92 @@
-import { withPluginApi } from "discourse/lib/plugin-api";
+# name: discourse-lottery-v3
+# about: A comprehensive and robust lottery plugin for Discourse, based on the V3 blueprint.
+# version: 0.1
+# authors: [Your Name]
+# url: [Your GitHub Repo URL]
 
-export default {
-  name: "lottery-form-initializer",
-  initialize() {
-    withPluginApi("1.0.0", (api) => {
-      console.log("🎲 Lottery form initializer loaded");
+enabled_site_setting :lottery_enabled
+
+# 注册资源文件
+register_asset "stylesheets/lottery-modal.scss"
+register_asset "stylesheets/lottery-form.scss"
+register_asset "stylesheets/lottery-display.scss"
+
+# 注册图标
+register_svg_icon "dice"
+
+# 添加路由
+Discourse::Application.routes.draw do
+  post "/admin/plugins/lottery/create" => "admin/plugins/lottery#create"
+end
+
+after_initialize do
+  Rails.logger.info "LotteryPlugin: Starting initialization"
+  
+  # 加载模型和服务
+  begin
+    require_relative 'lib/lottery'
+    Rails.logger.info "LotteryPlugin: Loaded lottery model"
+  rescue => e
+    Rails.logger.error "LotteryPlugin: Failed to load lottery model: #{e.message}"
+  end
+  
+  begin
+    require_relative 'lib/lottery_creator'
+    Rails.logger.info "LotteryPlugin: Loaded lottery creator"
+  rescue => e
+    Rails.logger.error "LotteryPlugin: Failed to load lottery creator: #{e.message}"
+  end
+  
+  # 定义模型关联
+  if defined?(Topic)
+    Topic.class_eval do
+      has_many :lotteries, dependent: :destroy
+    end
+    Rails.logger.info "LotteryPlugin: Added lotteries association to Topic"
+  end
+  
+  # 创建控制器
+  class ::Admin::Plugins::LotteryController < ::Admin::AdminController
+    def create
+      Rails.logger.info "LotteryController: Received lottery creation request"
+      Rails.logger.info "LotteryController: Params: #{params}"
       
-      // 关键修复：修改 composer 控制器的 save 方法
-      api.modifyClass("controller:composer", {
-        pluginId: "discourse-lottery-v3",
+      topic_id = params[:topic_id]
+      lottery_data = params[:lottery_data]
+      
+      unless topic_id && lottery_data
+        render json: { error: "Missing required parameters" }, status: 400
+        return
+      end
+      
+      begin
+        topic = Topic.find(topic_id)
+        user = current_user
         
-        save() {
-          console.log("🎲 Composer controller save called");
-          
-          // 在保存前设置 custom_fields
-          if (window.lotteryFormDataCache && !this.get("model.editingPost")) {
-            console.log("🎲 Found lottery cache, setting custom_fields before save");
-            const formData = window.lotteryFormDataCache;
-            
-            if (formData.prize_name && formData.prize_details && formData.draw_time) {
-              console.log("🎲 Valid lottery data, setting to model");
-              
-              const model = this.get("model");
-              
-              // 确保 custom_fields 存在
-              if (!model.custom_fields) {
-                model.set("custom_fields", {});
-              }
-              
-              // 设置抽奖数据
-              model.set("custom_fields.has_lottery", true);
-              model.set("custom_fields.lottery_name", formData.prize_name);
-              model.set("custom_fields.lottery_details", formData.prize_details);
-              model.set("custom_fields.lottery_time", formData.draw_time);
-              model.set("custom_fields.lottery_winners", formData.winners_count);
-              model.set("custom_fields.lottery_min", formData.min_participants);
-              model.set("custom_fields.lottery_strategy", formData.backup_strategy);
-              model.set("custom_fields.lottery_notes", formData.additional_notes || "");
-              model.set("custom_fields.lottery_posts", formData.specified_posts || "");
-              
-              console.log("🎲 Set custom_fields:", model.get("custom_fields"));
-              
-              // 强制标记为脏数据
-              model.notifyPropertyChange("custom_fields");
-              
-              // 清理缓存
-              window.lotteryFormDataCache = null;
-              console.log("🎲 Cache cleared");
-            }
-          }
-          
-          // 调用原始保存方法
-          return this._super(...arguments);
+        Rails.logger.info "LotteryController: Creating lottery for topic #{topic_id}"
+        Rails.logger.info "LotteryController: Data: #{lottery_data}"
+        
+        # 直接创建抽奖
+        lottery = LotteryCreator.new(topic, lottery_data, user).create
+        
+        Rails.logger.info "LotteryController: Successfully created lottery #{lottery.id}"
+        
+        render json: { 
+          success: true, 
+          lottery_id: lottery.id,
+          message: "抽奖创建成功"
         }
-      });
-      
-      // 监听话题创建成功
-      api.onAppEvent("topic:created", (topicData) => {
-        console.log("🎲 Topic created successfully");
-        console.log("🎲 Event data:", topicData);
-        console.log("🎲 Current URL:", window.location.href);
         
-        // 从URL获取真实的话题ID
-        const urlMatch = window.location.href.match(/\/t\/[^/]+\/(\d+)/);
-        const realTopicId = urlMatch ? urlMatch[1] : topicData.id;
+      rescue => e
+        Rails.logger.error "LotteryController: Error: #{e.message}"
+        Rails.logger.error "LotteryController: Backtrace: #{e.backtrace.join("\n")}"
         
-        console.log("🎲 Real topic ID:", realTopicId);
-        
-        // 验证数据是否保存
-        setTimeout(() => {
-          console.log("🎲 Verifying data was saved...");
-          
-          fetch(`/t/${realTopicId}.json`)
-            .then(response => response.json())
-            .then(data => {
-              console.log("🎲 Server response:", data);
-              
-              if (data.details && data.details.custom_fields) {
-                console.log("🎲 Custom fields from server:", data.details.custom_fields);
-                
-                if (data.details.custom_fields.has_lottery) {
-                  console.log("🎲 ✅ SUCCESS: Lottery data found!");
-                  console.log("🎲 Prize name:", data.details.custom_fields.lottery_name);
-                } else {
-                  console.log("🎲 ❌ FAIL: No lottery data in custom_fields");
-                }
-              } else {
-                console.log("🎲 ❌ FAIL: No custom_fields in response");
-              }
-            })
-            .catch(error => {
-              console.log("🎲 Error checking data:", error);
-            });
-        }, 3000);
-        
-        // 刷新页面显示结果
-        setTimeout(() => {
-          console.log("🎲 Refreshing to show processed lottery");
-          window.location.reload();
-        }, 6000);
-      });
-    });
-  },
-};
+        render json: { 
+          error: "创建失败: #{e.message}" 
+        }, status: 500
+      end
+    end
+  end
+  
+  Rails.logger.info "LotteryPlugin: Initialization completed"
+end
