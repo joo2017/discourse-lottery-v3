@@ -16,6 +16,7 @@ export default class LotteryFormModal extends Component {
   @tracked minParticipants = 5;
   @tracked backupStrategy = "continue";
   @tracked additionalNotes = "";
+  @tracked prizeImage = "";  // 新增：奖品图片字段
   
   // 状态管理
   @tracked isLoading = false;
@@ -131,6 +132,12 @@ export default class LotteryFormModal extends Component {
     console.log("🎲 更新补充说明:", this.additionalNotes);
   }
 
+  @action
+  updatePrizeImage(event) {
+    this.prizeImage = event.target.value;
+    console.log("🎲 更新奖品图片:", this.prizeImage);
+  }
+
   // 提交表单
   @action
   async submit() {
@@ -177,7 +184,8 @@ export default class LotteryFormModal extends Component {
         specified_posts: this.specifiedPosts.trim(),
         min_participants: this.minParticipants,
         backup_strategy: this.backupStrategy,
-        additional_notes: this.additionalNotes.trim()
+        additional_notes: this.additionalNotes.trim(),
+        prize_image: this.prizeImage.trim()  // 新增：图片字段
       };
 
       console.log("🎲 构建的抽奖数据对象:", lotteryData);
@@ -202,11 +210,15 @@ export default class LotteryFormModal extends Component {
       }
       
       placeholder += `参与门槛：${lotteryData.min_participants}人\n`;
-      placeholder += `后备策略：${lotteryData.backup_strategy === 'continue' ? '人数不足时继续开奖' : '人数不足时取消活动'}\n`;
       
       // 补充说明（如果有）
       if (lotteryData.additional_notes && lotteryData.additional_notes.trim()) {
         placeholder += `补充说明：${lotteryData.additional_notes}\n`;
+      }
+      
+      // 奖品图片（如果有）
+      if (lotteryData.prize_image && lotteryData.prize_image.trim()) {
+        placeholder += `奖品图片：${lotteryData.prize_image}\n`;
       }
       
       placeholder += `[/lottery]\n\n`;
