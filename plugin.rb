@@ -28,7 +28,8 @@ after_initialize do
   Topic.register_custom_field_type('lottery_notes', :string)
   Topic.register_custom_field_type('lottery_posts', :string)
   
-  Rails.logger.info "LotteryPlugin: Registered custom field types"
+  # 官方推荐：添加到 serializer
+  add_to_serializer(:topic_view, :custom_fields) { object.topic.custom_fields }
   
   # 加载模型和服务
   begin
@@ -51,58 +52,48 @@ after_initialize do
       has_many :lotteries, dependent: :destroy
     end
     Rails.logger.info "LotteryPlugin: Added lotteries association to Topic"
-  else
-    Rails.logger.error "LotteryPlugin: Topic class not found"
   end
   
-  # 官方推荐：添加到 serializer 以便客户端访问
-  add_to_serializer(:topic_view, :custom_fields) do
-    object.topic.custom_fields
-  end
-  
-  # 监听话题创建事件
-  DiscourseEvent.on(:post_created) do |post, opts, user|
-    next unless SiteSetting.lottery_enabled
-    next unless post.post_number == 1  # 只处理主楼层
+  # 官方推荐：使用 :topic_created 事件在话题创建时设置 custom_fields
+  on(:topic_created) do |topic, opts, user|
+    Rails.logger.info "LotteryPlugin: Topic created event - ID: #{topic.id}"
+    Rails.logger.info "LotteryPlugin: Opts: #{opts.inspect}"
     
-    topic = post.topic
-    Rails.logger.info "LotteryPlugin: Post created for topic #{topic.id}"
-    Rails.logger.info "LotteryPlugin: Custom fields: #{topic.custom_fields.inspect}"
-    
-    # 检查是否是抽奖话题
-    if topic.custom_fields['has_lottery']
-      Rails.logger.info "LotteryPlugin: ✅ Found lottery topic"
+    # 检查 opts 中是否有抽奖数据
+    if opts[:lottery_data].present?
+      Rails.logger.info "LotteryPlugin: Found lottery data in opts"
       
-      # 重建数据结构
-      lottery_data = {
-        'prize_name' => topic.custom_fields['lottery_name'],
-        'prize_details' => topic.custom_fields['lottery_details'],
-        'draw_time' => topic.custom_fields['lottery_time'],
-        'winners_count' => topic.custom_fields['lottery_winners'].to_i,
-        'min_participants' => topic.custom_fields['lottery_min'].to_i,
-        'backup_strategy' => topic.custom_fields['lottery_strategy'],
-        'additional_notes' => topic.custom_fields['lottery_notes'],
-        'specified_posts' => topic.custom_fields['lottery_posts']
-      }
+      lottery_data = opts[:lottery_data]
       
-      Rails.logger.info "LotteryPlugin: Reconstructed data: #{lottery_data.inspect}"
+      # 设置 custom_fields
+      topic.custom_fields['has_lottery'] = true
+      topic.custom_fields['lottery_name'] = lottery_data['prize_name']
+      topic.custom_fields['lottery_details'] = lottery_data['prize_details']
+      topic.custom_fields['lottery_time'] = lottery_data['draw_time']
+      topic.custom_fields['lottery_winners'] = lottery_data['winners_count']
+      topic.custom_fields['lottery_min'] = lottery_data['min_participants']
+      topic.custom_fields['lottery_strategy'] = lottery_data['backup_strategy']
+      topic.custom_fields['lottery_notes'] = lottery_data['additional_notes'] || ""
+      topic.custom_fields['lottery_posts'] = lottery_data['specified_posts'] || ""
       
-      # 验证必要字段
-      if lottery_data['prize_name'].present? && lottery_data['prize_details'].present?
-        Rails.logger.info "LotteryPlugin: ✅ Valid lottery data, creating lottery"
-        
-        Jobs.enqueue_in(5.seconds, :create_lottery, {
+      # 保存
+      topic.save!
+      
+      Rails.logger.info "LotteryPlugin: ✅ Saved custom_fields to topic"
+      
+      # 创建抽奖记录
+      begin
+        Jobs.enqueue_in(2.seconds, :create_lottery, {
           topic_id: topic.id,
           lottery_data: lottery_data,
           user_id: user.id
         })
-        
         Rails.logger.info "LotteryPlugin: ✅ Enqueued lottery creation job"
-      else
-        Rails.logger.warn "LotteryPlugin: ❌ Invalid lottery data, missing required fields"
+      rescue => e
+        Rails.logger.error "LotteryPlugin: ❌ Failed to enqueue job: #{e.message}"
       end
     else
-      Rails.logger.info "LotteryPlugin: Not a lottery topic"
+      Rails.logger.info "LotteryPlugin: No lottery data in opts"
     end
   end
   
