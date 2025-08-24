@@ -6,59 +6,87 @@ export default {
     withPluginApi("1.0.0", (api) => {
       console.log("🎲 Lottery form initializer loaded");
       
-      // 监听话题创建成功事件
-      api.onAppEvent("topic:created", async (topicData) => {
-        console.log("🎲 Topic created successfully:", topicData.id);
+      // 官方推荐：修改 topic 模型以支持 custom_fields
+      api.modifyClass("model:topic", {
+        pluginId: "discourse-lottery-v3",
         
-        // 检查是否有待处理的抽奖数据
-        if (window.lotteryFormDataCache) {
-          console.log("🎲 Found lottery cache data, updating topic custom_fields");
-          const formData = window.lotteryFormDataCache;
+        // 确保 custom_fields 被初始化
+        init() {
+          this._super(...arguments);
+          if (!this.custom_fields) {
+            this.custom_fields = {};
+          }
+        },
+        
+        // 官方推荐：确保 custom_fields 在 JSON 序列化时被包含
+        asJSON() {
+          const json = this._super(...arguments);
+          json.custom_fields = this.custom_fields;
+          return json;
+        }
+      });
+      
+      // 官方推荐：修改 composer 模型来设置 custom_fields
+      api.modifyClass("model:composer", {
+        pluginId: "discourse-lottery-v3",
+        
+        // 在创建话题时设置 custom_fields
+        createTopic() {
+          console.log("🎲 createTopic called");
           
-          if (formData.prize_name && formData.prize_details && formData.draw_time) {
-            console.log("🎲 Valid lottery data, updating via official API");
+          // 检查是否有抽奖数据
+          if (window.lotteryFormDataCache && !this.editingPost) {
+            console.log("🎲 Found lottery data, setting to topic model");
+            const formData = window.lotteryFormDataCache;
             
-            try {
-              // 使用 Discourse 官方的 Topic API 更新 custom_fields
-              const response = await fetch(`/t/${topicData.id}.json`, {
-                method: 'PUT',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-                },
-                body: JSON.stringify({
-                  topic: {
-                    custom_fields: {
-                      lottery_name: formData.prize_name,
-                      lottery_details: formData.prize_details,
-                      lottery_time: formData.draw_time,
-                      lottery_winners: formData.winners_count.toString(),
-                      lottery_min: formData.min_participants.toString(),
-                      lottery_strategy: formData.backup_strategy,
-                      lottery_notes: formData.additional_notes || "",
-                      lottery_posts: formData.specified_posts || "",
-                      has_lottery: "true"
-                    }
-                  }
-                })
-              });
+            if (formData.prize_name && formData.prize_details && formData.draw_time) {
+              console.log("🎲 Valid lottery data, setting custom_fields");
               
-              if (response.ok) {
-                console.log("🎲 ✅ Successfully updated topic custom_fields");
-                
-                // 清理缓存
-                window.lotteryFormDataCache = null;
-                console.log("🎲 Cache cleared");
-                
-              } else {
-                console.log("🎲 ❌ Failed to update custom_fields:", response.status);
+              // 获取或创建 topic 模型
+              if (!this.topic) {
+                this.set('topic', this.store.createRecord('topic'));
               }
               
-            } catch (error) {
-              console.log("🎲 ❌ Error updating custom_fields:", error);
+              const topic = this.topic;
+              
+              // 确保 custom_fields 存在
+              if (!topic.custom_fields) {
+                topic.custom_fields = {};
+              }
+              
+              // 设置抽奖相关的 custom_fields
+              topic.custom_fields.has_lottery = true;
+              topic.custom_fields.lottery_name = formData.prize_name;
+              topic.custom_fields.lottery_details = formData.prize_details;
+              topic.custom_fields.lottery_time = formData.draw_time;
+              topic.custom_fields.lottery_winners = formData.winners_count;
+              topic.custom_fields.lottery_min = formData.min_participants;
+              topic.custom_fields.lottery_strategy = formData.backup_strategy;
+              topic.custom_fields.lottery_notes = formData.additional_notes || "";
+              topic.custom_fields.lottery_posts = formData.specified_posts || "";
+              
+              console.log("🎲 Set topic custom_fields:", topic.custom_fields);
+              
+              // 清理缓存
+              window.lotteryFormDataCache = null;
+              console.log("🎲 Cache cleared");
             }
           }
+          
+          // 调用原始方法
+          return this._super(...arguments);
         }
+      });
+      
+      // 监听成功创建
+      api.onAppEvent("topic:created", (topicData) => {
+        console.log("🎲 Topic created successfully:", topicData.id);
+        
+        // 延迟刷新以显示处理结果
+        setTimeout(() => {
+          console.log("🎲 Refreshing page to show lottery display");
+          window.location.reload();
+        }, 3000);
       });
     });
   },
