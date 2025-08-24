@@ -4,88 +4,76 @@ export default {
   name: "lottery-form-initializer",
   initialize() {
     withPluginApi("1.0.0", (api) => {
-      console.log("🎲 Lottery form initializer loaded");
-      
-      // 方法1：通过 composer 的 save 事件
+      // 修改 composer 控制器来保存抽奖数据
       api.modifyClass("controller:composer", {
         pluginId: "discourse-lottery-v3",
         
         save(options) {
-          console.log("🎲 Composer save intercepted");
+          console.log("🎲 Composer save called");
+          console.log("🎲 Checking for lottery form...");
           
-          // 检查是否有缓存的抽奖数据
+          // 优先从缓存获取数据（防止组件被重新创建导致数据丢失）
           if (window.lotteryFormDataCache) {
-            console.log("🎲 Found lottery cache data:", window.lotteryFormDataCache);
-            
+            console.log("🎲 Found cached lottery form data");
             const formData = window.lotteryFormDataCache;
+            console.log("🎲 Cached lottery form data:", formData);
             
-            // 验证数据完整性
+            // 验证缓存数据是否有效（非空）
             if (formData.prize_name && formData.prize_details && formData.draw_time) {
-              console.log("🎲 Lottery data is valid, preparing to save");
+              console.log("🎲 Cache data is valid, using cached data");
               
-              // 确保模型存在
+              // 确保 custom_fields 对象存在
               const model = this.get("model");
-              if (model) {
-                // 方式1：直接设置到模型
-                if (!model.custom_fields) {
-                  model.set("custom_fields", {});
-                }
-                model.set("custom_fields.lottery", JSON.stringify(formData));
-                
-                // 方式2：添加到 metaData（如果模型支持）
-                if (model.metaData) {
-                  model.metaData.lottery = JSON.stringify(formData);
-                }
-                
-                console.log("🎲 Set lottery data in model custom_fields");
-                console.log("🎲 Model custom_fields:", model.custom_fields);
-                
-                // 清理缓存
-                window.lotteryFormDataCache = null;
-                console.log("🎲 Cleared cache");
-              } else {
-                console.error("🎲 No composer model found");
+              if (!model.custom_fields) {
+                model.set("custom_fields", {});
               }
+              
+              // 直接设置到模型属性
+              model.set("custom_fields.lottery", JSON.stringify(formData));
+              
+              // 标记模型为脏数据
+              model.notifyPropertyChange("custom_fields");
+              
+              console.log("🎲 Saved lottery data to custom_fields");
+              console.log("🎲 Final model custom_fields:", model.custom_fields);
+              
+              // 清理缓存
+              window.lotteryFormDataCache = null;
             } else {
-              console.log("🎲 Invalid lottery data, skipping");
+              console.log("🎲 Cache data is invalid (empty fields), not using cache");
             }
+          }
+          // 然后尝试从活跃组件获取数据（作为备选）
+          else if (window.currentLotteryForm) {
+            console.log("🎲 Found lottery form via global reference");
+            const formData = window.currentLotteryForm.formData;
+            console.log("🎲 Lottery form data:", formData);
+            
+            // 验证组件数据是否有效
+            if (formData.prize_name && formData.prize_details && formData.draw_time) {
+              console.log("🎲 Component data is valid, using component data");
+              
+              // 确保 custom_fields 对象存在
+              const model = this.get("model");
+              if (!model.custom_fields) {
+                model.set("custom_fields", {});
+              }
+              
+              // 直接设置到模型属性
+              model.set("custom_fields.lottery", JSON.stringify(formData));
+              
+              // 标记模型为脏数据
+              model.notifyPropertyChange("custom_fields");
+              
+              console.log("🎲 Saved lottery data to custom_fields");
+            } else {
+              console.log("🎲 Component data is invalid (empty fields), not saving");
+            }
+          } else {
+            console.log("🎲 No lottery form found");
           }
           
           return this._super(options);
-        }
-      });
-
-      // 方法2：通过 topic 创建事件（备选方案）
-      api.onAppEvent("topic:created", (data) => {
-        console.log("🎲 Topic created event fired:", data);
-        
-        if (window.lotteryFormDataCache) {
-          console.log("🎲 Sending lottery data via AJAX");
-          
-          const formData = window.lotteryFormDataCache;
-          
-          // 通过 AJAX 直接发送数据到后端
-          fetch(`/t/${data.id}/lottery`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-            },
-            body: JSON.stringify({
-              lottery_data: formData
-            })
-          }).then(response => {
-            if (response.ok) {
-              console.log("🎲 Lottery data sent successfully");
-            } else {
-              console.error("🎲 Failed to send lottery data");
-            }
-            // 清理缓存
-            window.lotteryFormDataCache = null;
-          }).catch(error => {
-            console.error("🎲 Error sending lottery data:", error);
-            window.lotteryFormDataCache = null;
-          });
         }
       });
     });
