@@ -12,7 +12,9 @@ export default {
         
         save(options) {
           console.log("🎲 Composer save called");
-          console.log("🎲 Checking for lottery form data...");
+          console.log("🎲 Options:", options);
+          console.log("🎲 Model state:", this.get("model"));
+          console.log("🎲 Current custom_fields:", this.get("model.custom_fields"));
           
           // 检查是否有缓存的抽奖数据
           if (window.lotteryFormDataCache) {
@@ -25,44 +27,63 @@ export default {
               console.log("🎲 Cache data is valid, saving to custom_fields");
               
               const model = this.get("model");
+              console.log("🎲 Model before modification:", model);
               
-              // 确保 custom_fields 存在
+              // 方法1：直接操作对象
               if (!model.custom_fields) {
                 model.custom_fields = {};
+                console.log("🎲 Created custom_fields object");
               }
               
-              // 保存抽奖数据到 custom_fields
               model.custom_fields.lottery = JSON.stringify(formData);
+              console.log("🎲 Set lottery data:", model.custom_fields.lottery);
               
-              // 关键：标记 custom_fields 为脏数据，确保保存到数据库
-              model.set("custom_fields", model.custom_fields);
+              // 方法2：使用 set 方法强制更新
+              model.set("custom_fields", Object.assign({}, model.custom_fields));
+              
+              // 方法3：标记属性变化
               model.notifyPropertyChange("custom_fields");
               
-              console.log("🎲 Lottery data saved to custom_fields");
-              console.log("🎲 Final custom_fields:", model.custom_fields);
+              // 方法4：直接标记模型为脏
+              if (model.set) {
+                model.set("custom_fields.lottery", JSON.stringify(formData));
+              }
+              
+              console.log("🎲 Final model custom_fields:", model.custom_fields);
+              console.log("🎲 Model after all modifications:", model);
               
               // 清理缓存
               window.lotteryFormDataCache = null;
               console.log("🎲 Cache cleared");
             } else {
-              console.log("🎲 Invalid cache data (missing required fields), skipping");
+              console.log("🎲 Invalid cache data (missing required fields):", formData);
             }
           } else {
             console.log("🎲 No lottery cache found");
           }
           
           // 调用原始的 save 方法
-          return this._super(options);
+          const result = this._super(options);
+          console.log("🎲 Save result:", result);
+          return result;
         }
       });
       
-      // 调试用：监听 topic 创建事件，检查数据是否正确保存
+      // 调试：监听更多事件
+      api.onAppEvent("composer:saved", () => {
+        console.log("🎲 Composer saved event fired");
+      });
+      
       api.onAppEvent("topic:created", (topicData) => {
-        console.log("🎲 Topic created event fired:", topicData);
-        console.log("🎲 Topic ID:", topicData.id);
+        console.log("🎲 Topic created event fired");
+        console.log("🎲 Topic data:", topicData);
+        console.log("🎲 Actual topic ID:", topicData.id);
         
-        // 这里不发送 AJAX 请求，只是用于调试
-        console.log("🎲 Data should now be in topic custom_fields for backend processing");
+        // 验证数据是否真的保存了
+        setTimeout(() => {
+          console.log("🎲 Checking if data was actually saved...");
+          // 这里可以通过 AJAX 查询验证，但先不加复杂度
+        }, 2000);
       });
     });
   },
