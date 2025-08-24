@@ -16,7 +16,9 @@ export default class LotteryFormModal extends Component {
   @tracked minParticipants = 5;
   @tracked backupStrategy = "continue";
   @tracked additionalNotes = "";
-  @tracked prizeImage = "";  // 新增：奖品图片字段
+  @tracked prizeImage = "";  // 图片URL
+  @tracked prizeImagePreview = "";  // 图片预览URL
+  @tracked isImageUploading = false;  // 图片上传状态
   
   // 状态管理
   @tracked isLoading = false;
@@ -136,6 +138,73 @@ export default class LotteryFormModal extends Component {
   updatePrizeImage(event) {
     this.prizeImage = event.target.value;
     console.log("🎲 更新奖品图片:", this.prizeImage);
+  }
+
+  // 处理图片上传
+  @action
+  async handleImageUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // 验证文件类型
+    if (!file.type.startsWith('image/')) {
+      this.showFlash("请选择图片文件", "error");
+      return;
+    }
+
+    // 验证文件大小 (3MB)
+    if (file.size > 3 * 1024 * 1024) {
+      this.showFlash("图片文件大小不能超过 3MB", "error");
+      return;
+    }
+
+    this.isImageUploading = true;
+    console.log("🎲 开始上传图片:", file.name);
+
+    try {
+      // 创建预览
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        this.prizeImagePreview = e.target.result;
+      };
+      reader.readAsDataURL(file);
+
+      // 使用 Discourse 的上传 API
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('type', 'composer');
+
+      const response = await fetch('/uploads.json', {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        this.prizeImage = data.url;
+        console.log("🎲 图片上传成功:", this.prizeImage);
+        this.showFlash("图片上传成功", "success");
+      } else {
+        throw new Error('上传失败');
+      }
+    } catch (error) {
+      console.error("🎲 图片上传失败:", error);
+      this.showFlash("图片上传失败，请重试", "error");
+      this.prizeImagePreview = "";
+    } finally {
+      this.isImageUploading = false;
+    }
+  }
+
+  // 移除图片
+  @action
+  removeImage() {
+    this.prizeImage = "";
+    this.prizeImagePreview = "";
+    console.log("🎲 移除图片");
   }
 
   // 提交表单
