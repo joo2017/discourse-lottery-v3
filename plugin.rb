@@ -42,280 +42,60 @@ after_initialize do
     Rails.logger.error "LotteryPlugin: Topic class not found"
   end
   
-  # 监听话题创建事件
+  # 监听话题创建事件 - 添加更多调试信息
   DiscourseEvent.on(:post_created) do |post, opts, user|
+    Rails.logger.info "LotteryPlugin: Post created event fired"
+    Rails.logger.info "LotteryPlugin: Post ID: #{post.id}, Post number: #{post.post_number}"
+    Rails.logger.info "LotteryPlugin: Topic ID: #{post.topic.id}"
+    Rails.logger.info "LotteryPlugin: User ID: #{user.id}"
+    Rails.logger.info "LotteryPlugin: Lottery enabled: #{SiteSetting.lottery_enabled}"
+    
     next unless SiteSetting.lottery_enabled
     next unless post.post_number == 1  # 只处理主楼层
     
     topic = post.topic
-    Rails.logger.info "LotteryPlugin: Post created for topic #{topic.id}, checking for lottery data"
+    Rails.logger.info "LotteryPlugin: Processing main post for topic #{topic.id}"
+    Rails.logger.info "LotteryPlugin: Topic custom_fields: #{topic.custom_fields.inspect}"
     
     # 检查是否有抽奖数据在 custom_fields 中
     lottery_data = topic.custom_fields['lottery']
+    Rails.logger.info "LotteryPlugin: Lottery data found: #{lottery_data.present?}"
+    
     if lottery_data.present?
-      Rails.logger.info "LotteryPlugin: Found lottery data in custom_fields: #{lottery_data}"
+      Rails.logger.info "LotteryPlugin: Raw lottery data: #{lottery_data}"
       begin
         parsed_data = JSON.parse(lottery_data)
+        Rails.logger.info "LotteryPlugin: Parsed data keys: #{parsed_data.keys}"
         Rails.logger.info "LotteryPlugin: Parsed data: #{parsed_data.inspect}"
         
-        # 立即执行，不要延迟
-        Jobs.enqueue(:create_lottery, {
-          topic_id: topic.id,
-          lottery_data: parsed_data,
-          user_id: user.id
-        })
+        # 立即执行而不是延迟，避免时机问题
+        Rails.logger.info "LotteryPlugin: Creating lottery immediately"
+        LotteryCreator.new(topic, parsed_data, user).create
+        Rails.logger.info "LotteryPlugin: Lottery created successfully"
         
-        Rails.logger.info "LotteryPlugin: Enqueued lottery creation job"
       rescue => e
-        Rails.logger.error "LotteryPlugin: Failed to parse lottery data: #{e.message}"
+        Rails.logger.error "LotteryPlugin: Failed to create lottery: #{e.message}"
         Rails.logger.error "LotteryPlugin: Backtrace: #{e.backtrace.join("\n")}"
+        
+        # 发布错误消息
+        PostCreator.create!(
+          Discourse.system_user,
+          topic_id: topic.id,
+          raw: "抽奖创建失败：#{e.message}。请联系管理员。"
+        )
       end
     else
-      Rails.logger.info "LotteryPlugin: No lottery data found in custom_fields for topic #{topic.id}"
+      Rails.logger.info "LotteryPlugin: No lottery data found in custom_fields"
+      # 调试：检查是否有其他相关字段
+      Rails.logger.info "LotteryPlugin: All custom_fields keys: #{topic.custom_fields.keys}"
     end
   end
-
-  # 监听帖子编辑事件
-  DiscourseEvent.on(:post_edited) do |post, topic_changed, user|
-    next unless SiteSetting.lottery_enabled
-    next unless post.post_number == 1  # 只处理主楼层编辑
-    
-    topic = post.topic
-    lottery = topic.lotteries.first
-    
-    if lottery && lottery.running?
-      Rails.logger.info "LotteryPlugin: Post edited for lottery topic #{topic.id}"
-      
-      # 检查帖子是否被锁定
-      if post.locked?
-        Rails.logger.info "LotteryPlugin: Post is locked, ignoring edit"
-        next
-      end
-      
-      # 检查是否有新的抽奖数据
-      lottery_data = topic.custom_fields['lottery']
-      if lottery_data.present?
-        begin
-          parsed_data = JSON.parse(lottery_data)
-          Rails.logger.info "LotteryPlugin: Updating lottery with new data: #{parsed_data.inspect}"
-          
-          # 更新现有记录
-          update_lottery_record(lottery, parsed_data)
-        rescue => e
-          Rails.logger.error "LotteryPlugin: Failed to update lottery: #{e.message}"
-        end
-      end
-    end
-  end
-
-  # 监听帖子渲染，替换抽奖占位符为美化组件
-  DiscourseEvent.on(:post_process_cooked) do |doc, post|
-    next unless SiteSetting.lottery_enabled
-    
-    # 查找包含抽奖标记的段落
-    lottery_blocks = doc.css('p').select { |p| p.text.include?('[lottery]') && p.text.include?('[/lottery]') }
-    
-    lottery_blocks.each do |block|
-      content = block.text
-      if match_data = content.match(/\[lottery\](.*?)\[\/lottery\]/m)
-        Rails.logger.info "LotteryPlugin: Found lottery placeholder, replacing with beautiful display"
-        
-        # 解析抽奖数据
-        lottery_info = match_data[1]
-        lottery_data = parse_lottery_content(lottery_info)
-        
-        # 如果有对应的数据库记录，获取状态信息
-        if post.topic&.lotteries&.first
-          lottery_record = post.topic.lotteries.first
-          lottery_data[:status] = lottery_record.status
-        end
-        
-        # 替换为美化的HTML
-        beautiful_html = generate_lottery_display_html(lottery_data)
-        block.replace(beautiful_html)
-        
-        Rails.logger.info "LotteryPlugin: Replaced lottery placeholder with beautiful display"
-      end
-    end
+  
+  # 额外调试：监听话题保存事件
+  DiscourseEvent.on(:topic_created) do |topic, opts, user|
+    Rails.logger.info "LotteryPlugin: Topic created event fired for topic #{topic.id}"
+    Rails.logger.info "LotteryPlugin: Topic custom_fields at creation: #{topic.custom_fields.inspect}"
   end
   
   Rails.logger.info "LotteryPlugin: Initialization completed"
-  
-  # 定义后台任务
-  module ::Jobs
-    class CreateLottery < ::Jobs::Base
-      def execute(args)
-        topic_id = args[:topic_id]
-        lottery_data = args[:lottery_data]
-        user_id = args[:user_id]
-        
-        Rails.logger.info "CreateLottery Job: Starting for topic #{topic_id}"
-        Rails.logger.info "CreateLottery Job: Lottery data: #{lottery_data.inspect}"
-        
-        begin
-          topic = Topic.find(topic_id)
-          user = User.find(user_id)
-          
-          LotteryCreator.new(topic, lottery_data, user).create
-          Rails.logger.info "CreateLottery Job: Successfully created lottery for topic #{topic_id}"
-          
-          # 刷新帖子以触发美化显示
-          topic.first_post.rebake!
-          
-        rescue => e
-          Rails.logger.error "CreateLottery Job: Failed to create lottery: #{e.message}"
-          Rails.logger.error "CreateLottery Job: Backtrace: #{e.backtrace.join("\n")}"
-          
-          # 发布错误消息
-          PostCreator.create!(
-            Discourse.system_user,
-            topic_id: topic_id,
-            raw: "抽奖创建失败：#{e.message}。请联系管理员。"
-          )
-        end
-      end
-    end
-  end
-
-  # 更新抽奖记录的辅助方法
-  def self.update_lottery_record(lottery, new_data)
-    Rails.logger.info "LotteryPlugin: Updating lottery #{lottery.id} with new data"
-    
-    lottery.update!(
-      prize_name: new_data['prize_name'],
-      prize_details: new_data['prize_details'],
-      draw_time: DateTime.parse(new_data['draw_time']),
-      winners_count: new_data['winners_count'].to_i,
-      min_participants: new_data['min_participants'].to_i,
-      backup_strategy: new_data['backup_strategy'] || 'continue',
-      additional_notes: new_data['additional_notes']
-    )
-    
-    Rails.logger.info "LotteryPlugin: Successfully updated lottery record"
-    
-    # 刷新帖子显示
-    lottery.topic.first_post.rebake!
-  end
-
-  # 解析抽奖内容的辅助方法
-  def self.parse_lottery_content(content)
-    data = {}
-    content.split("\n").each do |line|
-      line = line.strip
-      next if line.empty?
-      
-      if line.include?('：')
-        key, value = line.split('：', 2)
-        case key.strip
-        when '活动名称'
-          data[:prize_name] = value.strip
-        when '奖品说明'
-          data[:prize_details] = value.strip
-        when '开奖时间'
-          data[:draw_time] = value.strip
-        when '抽奖方式'
-          data[:lottery_type] = value.strip
-        when '获奖人数'
-          data[:winners_count] = value.strip.to_i
-        when '指定楼层'
-          data[:specified_posts] = value.strip
-        when '参与门槛'
-          data[:min_participants] = value.gsub(/[^\d]/, '').to_i
-        when '补充说明'
-          data[:additional_notes] = value.strip
-        when '奖品图片'
-          data[:prize_image] = value.strip
-        end
-      end
-    end
-    data
-  end
-
-  # 生成美化显示HTML的方法
-  def self.generate_lottery_display_html(data)
-    status_class = "lottery-status-#{data[:status] || 'running'}"
-    status_text = case data[:status]
-                  when 'finished' then '🎉 已开奖'
-                  when 'cancelled' then '❌ 已取消'
-                  else '🏃 进行中'
-                  end
-
-    # 格式化开奖时间
-    formatted_time = begin
-      Time.parse(data[:draw_time]).strftime('%Y年%m月%d日 %H:%M')
-    rescue
-      data[:draw_time]
-    end
-
-    # 判断抽奖方式
-    lottery_method = if data[:specified_posts] && !data[:specified_posts].empty?
-                      "指定楼层 (#{data[:specified_posts]})"
-                    else
-                      "随机抽取 #{data[:winners_count]} 人"
-                    end
-
-    html = <<~HTML
-      <div class="lottery-display-card #{status_class}">
-        <div class="lottery-header">
-          <div class="lottery-title">
-            <span class="lottery-icon">🎲</span>
-            <h3>#{CGI.escapeHTML(data[:prize_name] || '')}</h3>
-          </div>
-          <div class="lottery-status">#{status_text}</div>
-        </div>
-        <div class="lottery-content">
-    HTML
-
-    # 添加图片（如果有）
-    if data[:prize_image] && !data[:prize_image].empty?
-      html += <<~HTML
-        <div class="lottery-image">
-          <img src="#{CGI.escapeHTML(data[:prize_image])}" alt="奖品图片" />
-        </div>
-      HTML
-    end
-
-    html += <<~HTML
-          <div class="lottery-details">
-            <div class="lottery-detail-item">
-              <span class="label">🎁 奖品说明：</span>
-              <span class="value">#{CGI.escapeHTML(data[:prize_details] || '').gsub("\n", "<br>")}</span>
-            </div>
-            <div class="lottery-detail-item">
-              <span class="label">⏰ 开奖时间：</span>
-              <span class="value">#{formatted_time}</span>
-            </div>
-            <div class="lottery-detail-item">
-              <span class="label">🎯 抽奖方式：</span>
-              <span class="value">#{lottery_method}</span>
-            </div>
-            <div class="lottery-detail-item">
-              <span class="label">👥 参与门槛：</span>
-              <span class="value">至少 #{data[:min_participants]} 人参与</span>
-            </div>
-    HTML
-
-    # 添加补充说明（如果有）
-    if data[:additional_notes] && !data[:additional_notes].empty?
-      html += <<~HTML
-            <div class="lottery-detail-item">
-              <span class="label">📝 补充说明：</span>
-              <span class="value">#{CGI.escapeHTML(data[:additional_notes])}</span>
-            </div>
-      HTML
-    end
-
-    html += <<~HTML
-          </div>
-        </div>
-        <div class="lottery-footer">
-          <div class="participation-tip">
-            💡 <strong>参与方式：</strong>在本话题下回复即可参与抽奖
-          </div>
-        </div>
-      </div>
-    HTML
-
-    html
-  end
 end
