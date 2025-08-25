@@ -1,3 +1,4 @@
+// assets/javascripts/discourse/components/modal/lottery-form-modal.js
 import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
@@ -16,9 +17,9 @@ export default class LotteryFormModal extends Component {
   @tracked minParticipants = 5;
   @tracked backupStrategy = "continue";
   @tracked additionalNotes = "";
-  @tracked prizeImage = "";  // 图片URL
-  @tracked prizeImagePreview = "";  // 图片预览URL
-  @tracked isImageUploading = false;  // 图片上传状态
+  @tracked prizeImage = "";
+  @tracked prizeImagePreview = "";
+  @tracked isImageUploading = false;
   
   // 状态管理
   @tracked isLoading = false;
@@ -38,8 +39,19 @@ export default class LotteryFormModal extends Component {
     defaultTime.setHours(defaultTime.getHours() + 1);
     this.drawTime = defaultTime.toISOString().slice(0, 16);
 
+    // 注册全局引用（用于数据获取）
+    window.currentLotteryForm = this;
+
     console.log("🎲 初始化完成，默认开奖时间:", this.drawTime);
     console.log("🎲 最小参与人数:", this.minParticipants);
+  }
+
+  // 清理时移除全局引用
+  willDestroy() {
+    super.willDestroy();
+    if (window.currentLotteryForm === this) {
+      window.currentLotteryForm = null;
+    }
   }
 
   // 表单验证
@@ -50,11 +62,6 @@ export default class LotteryFormModal extends Component {
     const hasValidMinParticipants = this.minParticipants >= this.globalMinParticipants;
     
     const valid = hasRequiredFields && hasValidMinParticipants;
-    console.log("🎲 表单验证结果:", {
-      hasRequiredFields,
-      hasValidMinParticipants,
-      valid
-    });
     
     return valid;
   }
@@ -62,6 +69,23 @@ export default class LotteryFormModal extends Component {
   // 获取全局最小参与人数
   get globalMinParticipants() {
     return this.args.model?.siteSettings?.lottery_min_participants_global || 5;
+  }
+
+  // 获取当前表单数据（供外部调用）
+  getLotteryData() {
+    if (!this.isValid) return null;
+    
+    return {
+      prize_name: this.prizeName.trim(),
+      prize_details: this.prizeDetails.trim(),
+      draw_time: this.drawTime.trim(),
+      winners_count: this.winnersCount,
+      specified_posts: this.specifiedPosts.trim(),
+      min_participants: this.minParticipants,
+      backup_strategy: this.backupStrategy,
+      additional_notes: this.additionalNotes.trim(),
+      prize_image: this.prizeImage.trim()
+    };
   }
 
   // 显示 flash 消息
@@ -75,7 +99,6 @@ export default class LotteryFormModal extends Component {
   // 清除 flash 消息
   @action
   clearFlash() {
-    console.log("🎲 清除 flash 消息");
     this.flash = "";
     this.flashType = "";
   }
@@ -85,33 +108,28 @@ export default class LotteryFormModal extends Component {
   updatePrizeName(event) {
     this.prizeName = event.target.value;
     this.clearFlash();
-    console.log("🎲 更新活动名称:", this.prizeName);
   }
 
   @action
   updatePrizeDetails(event) {
     this.prizeDetails = event.target.value;
     this.clearFlash();
-    console.log("🎲 更新奖品说明:", this.prizeDetails);
   }
 
   @action
   updateDrawTime(event) {
     this.drawTime = event.target.value;
     this.clearFlash();
-    console.log("🎲 更新开奖时间:", this.drawTime);
   }
 
   @action
   updateWinnersCount(event) {
     this.winnersCount = parseInt(event.target.value) || 1;
-    console.log("🎲 更新获奖人数:", this.winnersCount);
   }
 
   @action
   updateSpecifiedPosts(event) {
     this.specifiedPosts = event.target.value;
-    console.log("🎲 更新指定楼层:", this.specifiedPosts);
   }
 
   @action
@@ -119,25 +137,16 @@ export default class LotteryFormModal extends Component {
     const num = parseInt(event.target.value) || 0;
     this.minParticipants = Math.max(num, this.globalMinParticipants);
     this.clearFlash();
-    console.log("🎲 更新参与门槛:", this.minParticipants);
   }
 
   @action
   updateBackupStrategy(event) {
     this.backupStrategy = event.target.value;
-    console.log("🎲 更新后备策略:", this.backupStrategy);
   }
 
   @action
   updateAdditionalNotes(event) {
     this.additionalNotes = event.target.value;
-    console.log("🎲 更新补充说明:", this.additionalNotes);
-  }
-
-  @action
-  updatePrizeImage(event) {
-    this.prizeImage = event.target.value;
-    console.log("🎲 更新奖品图片:", this.prizeImage);
   }
 
   // 处理图片上传
@@ -207,10 +216,10 @@ export default class LotteryFormModal extends Component {
     console.log("🎲 移除图片");
   }
 
-  // 提交表单
+  // === 核心提交方法（使用官方推荐方式） ===
   @action
   async submit() {
-    console.log("🎲 开始提交抽奖表单");
+    console.log("🎲 开始提交抽奖表单 - 使用官方Custom Fields方法");
     this.clearFlash();
 
     if (!this.isValid) {
@@ -229,6 +238,13 @@ export default class LotteryFormModal extends Component {
         this.showFlash("开奖时间必须是未来时间");
         return;
       }
+      
+      // 检查是否至少30分钟后
+      const minTime = new Date(Date.now() + 30 * 60 * 1000);
+      if (drawDate < minTime) {
+        this.showFlash("开奖时间至少要在30分钟之后");
+        return;
+      }
     } catch (e) {
       this.showFlash("开奖时间格式无效");
       return;
@@ -244,67 +260,45 @@ export default class LotteryFormModal extends Component {
     console.log("🎲 开始处理表单提交，设置加载状态");
 
     try {
-      // 构建抽奖数据
-      const lotteryData = {
-        prize_name: this.prizeName.trim(),
-        prize_details: this.prizeDetails.trim(),
-        draw_time: this.drawTime.trim(),
-        winners_count: this.winnersCount,
-        specified_posts: this.specifiedPosts.trim(),
-        min_participants: this.minParticipants,
-        backup_strategy: this.backupStrategy,
-        additional_notes: this.additionalNotes.trim(),
-        prize_image: this.prizeImage.trim()  // 新增：图片字段
-      };
-
+      // 构建抽奖数据对象
+      const lotteryData = this.getLotteryData();
       console.log("🎲 构建的抽奖数据对象:", lotteryData);
 
-      // 缓存数据供后续使用
+      // === 官方推荐方式：缓存数据供初始化器使用 ===
       window.lotteryFormDataCache = lotteryData;
       console.log("🎲 数据已缓存到 window.lotteryFormDataCache");
 
-      // 构建完整的占位符内容（修复后的版本）
-      let placeholder = `\n[lottery]\n`;
-      placeholder += `活动名称：${lotteryData.prize_name}\n`;
-      placeholder += `奖品说明：${lotteryData.prize_details}\n`;
-      placeholder += `开奖时间：${lotteryData.draw_time}\n`;
-      
-      // 智能判断抽奖方式
-      if (lotteryData.specified_posts && lotteryData.specified_posts.trim()) {
-        placeholder += `抽奖方式：指定楼层\n`;
-        placeholder += `指定楼层：${lotteryData.specified_posts}\n`;
-      } else {
-        placeholder += `抽奖方式：随机抽取\n`;
-        placeholder += `获奖人数：${lotteryData.winners_count}\n`;
-      }
-      
-      placeholder += `参与门槛：${lotteryData.min_participants}人\n`;
-      
-      // 补充说明（如果有）
-      if (lotteryData.additional_notes && lotteryData.additional_notes.trim()) {
-        placeholder += `补充说明：${lotteryData.additional_notes}\n`;
-      }
-      
-      // 奖品图片（如果有）
-      if (lotteryData.prize_image && lotteryData.prize_image.trim()) {
-        placeholder += `奖品图片：${lotteryData.prize_image}\n`;
-      }
-      
-      placeholder += `[/lottery]\n\n`;
-      
-      // 获取编辑器并插入内容
+      // 获取composer实例
       const composer = this.args.model?.composer;
       console.log("🎲 获取编辑器实例:", composer);
       
-      if (composer) {
+      if (composer && composer.get) {
+        // 直接设置抽奖数据到composer模型（官方推荐方式）
+        const model = composer.get('model');
+        if (model) {
+          console.log("🎲 找到composer模型，直接设置抽奖数据");
+          model.set('lottery_data', lotteryData);
+          model.set('lottery_status', 'running');
+          
+          // 通知属性变更（触发序列化）
+          model.notifyPropertyChange('lottery_data');
+          model.notifyPropertyChange('lottery_status');
+          
+          console.log("🎲 已将抽奖数据设置到composer模型");
+        }
+
+        // 构建占位符内容（用于用户查看）
+        let placeholder = this.buildPlaceholderContent(lotteryData);
+        
+        // 插入占位符到编辑器内容
         const currentText = composer.get("model.reply") || "";
         composer.set("model.reply", currentText + placeholder);
 
-        console.log("🎲 抽奖内容成功插入到编辑器");
+        console.log("🎲 抽奖占位符成功插入到编辑器");
         console.log("🎲 插入的完整占位符:", placeholder);
         
         // 显示成功消息
-        this.showFlash("抽奖信息已插入编辑器", "success");
+        this.showFlash("抽奖信息已插入编辑器，发布主题后抽奖将自动生效", "success");
         
         // 延迟关闭模态框，让用户看到成功提示
         setTimeout(() => {
@@ -322,6 +316,40 @@ export default class LotteryFormModal extends Component {
       this.isLoading = false;
       console.log("🎲 清除加载状态");
     }
+  }
+
+  // 构建占位符内容的辅助方法
+  buildPlaceholderContent(lotteryData) {
+    let placeholder = `\n[lottery]\n`;
+    placeholder += `活动名称：${lotteryData.prize_name}\n`;
+    placeholder += `奖品说明：${lotteryData.prize_details}\n`;
+    placeholder += `开奖时间：${lotteryData.draw_time}\n`;
+    
+    // 智能判断抽奖方式
+    if (lotteryData.specified_posts && lotteryData.specified_posts.trim()) {
+      placeholder += `抽奖方式：指定楼层\n`;
+      placeholder += `指定楼层：${lotteryData.specified_posts}\n`;
+    } else {
+      placeholder += `抽奖方式：随机抽取\n`;
+      placeholder += `获奖人数：${lotteryData.winners_count}\n`;
+    }
+    
+    placeholder += `参与门槛：${lotteryData.min_participants}人\n`;
+    placeholder += `后备策略：${lotteryData.backup_strategy === 'continue' ? '人数不足时继续开奖' : '人数不足时取消活动'}\n`;
+    
+    // 补充说明（如果有）
+    if (lotteryData.additional_notes && lotteryData.additional_notes.trim()) {
+      placeholder += `补充说明：${lotteryData.additional_notes}\n`;
+    }
+    
+    // 奖品图片（如果有）
+    if (lotteryData.prize_image && lotteryData.prize_image.trim()) {
+      placeholder += `奖品图片：${lotteryData.prize_image}\n`;
+    }
+    
+    placeholder += `[/lottery]\n\n`;
+    
+    return placeholder;
   }
 
   // 取消操作
