@@ -240,8 +240,8 @@ after_initialize do
           # 添加抽奖标签
           add_lottery_tag(topic)
           
-          # 创建系统信息帖子
-          create_lottery_info_post(topic, lottery_data)
+          # 不创建系统信息帖子，让用户的占位符自然显示
+          # create_lottery_info_post(topic, lottery_data)
           
           # 发布消息总线通知（实时更新前端）
           publish_lottery_notification(topic, lottery_data)
@@ -366,6 +366,46 @@ after_initialize do
   end
   
   # === 辅助方法 ===
+  def self.extract_placeholder_content(text)
+    data = {}
+    
+    # 提取[lottery]...[/lottery]之间的内容
+    match = text.match(/\[lottery\](.*?)\[\/lottery\]/m)
+    return data unless match
+    
+    content = match[1].strip
+    content.split("\n").each do |line|
+      line = line.strip
+      next if line.empty?
+      
+      if line.include?('：')
+        key, value = line.split('：', 2)
+        case key.strip
+        when '活动名称'
+          data['prize_name'] = value.strip
+        when '奖品说明'
+          data['prize_details'] = value.strip
+        when '开奖时间'
+          data['draw_time'] = value.strip
+        when '获奖人数'
+          data['winners_count'] = value.strip.to_i
+        when '指定楼层'
+          data['specified_posts'] = value.strip
+        when '参与门槛'
+          data['min_participants'] = value.gsub(/[^\d]/, '').to_i
+        when '补充说明'
+          data['additional_notes'] = value.strip
+        when '奖品图片'
+          data['prize_image'] = value.strip
+        when '后备策略'
+          data['backup_strategy'] = value.include?('继续') ? 'continue' : 'cancel'
+        end
+      end
+    end
+    
+    data
+  end
+  
   def self.create_error_post(topic, message)
     PostCreator.create!(
       Discourse.system_user,
