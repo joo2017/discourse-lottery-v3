@@ -1,5 +1,6 @@
 // assets/javascripts/discourse/initializers/lottery-form-initializer.js
 import { withPluginApi } from "discourse/lib/plugin-api";
+import { computed } from "@ember/object";
 
 export default {
   name: "lottery-form-initializer",
@@ -17,21 +18,27 @@ export default {
 
       console.log("🎲 已注册字段序列化");
 
-      // === 第二步：扩展Topic模型（前端） ===
+      // === 第二步：扩展Topic模型（前端） - 修复版本 ===
       api.modifyClass('model:topic', {
         pluginId: 'discourse-lottery-v3',
 
-        // 添加便捷属性
-        hasLottery: function() {
+        // 修复：使用computed替代.property()
+        hasLottery: computed('lottery_data', function() {
           return this.lottery_data && Object.keys(this.lottery_data).length > 0;
-        }.property('lottery_data'),
+        }),
 
-        lotteryStatus: function() {
+        lotteryStatus: computed('lottery_status', function() {
           return this.lottery_status || 'none';
-        }.property('lottery_status'),
+        }),
 
-        // 确保custom_fields同步
-        updateCustomFields: function() {
+        // 移除observes，改用computed属性和手动调用
+        init() {
+          this._super(...arguments);
+          this.updateCustomFields();
+        },
+
+        // 手动同步custom_fields
+        updateCustomFields() {
           if (this.lottery_data) {
             if (!this.custom_fields) {
               this.set('custom_fields', {});
@@ -39,12 +46,12 @@ export default {
             this.set('custom_fields.lottery_data', JSON.stringify(this.lottery_data));
             this.set('custom_fields.lottery_status', this.lottery_status);
           }
-        }.observes('lottery_data', 'lottery_status')
+        }
       });
 
       console.log("🎲 已扩展Topic模型");
 
-      // === 第三步：扩展Composer控制器（官方推荐方法） ===
+      // === 第三步：扩展Composer控制器（修复版本） ===
       api.modifyClass("controller:composer", {
         pluginId: "discourse-lottery-v3",
 
@@ -175,7 +182,7 @@ export default {
         const topicController = api.container.lookup('controller:topic');
         if (topicController) {
           const model = topicController.get('model');
-          if (model && model.has_lottery) {
+          if (model && model.hasLottery) {
             console.log("🎲 页面加载的抽奖主题:", {
               id: model.id,
               lottery_data: model.lottery_data,
@@ -195,6 +202,8 @@ export default {
           console.log("  - lottery_status:", model.get('lottery_status'));
           console.log("  - custom_fields:", model.get('custom_fields'));
           console.log("  - 缓存数据:", window.lotteryFormDataCache);
+        } else {
+          console.log("🎲 未找到Composer");
         }
       };
 
