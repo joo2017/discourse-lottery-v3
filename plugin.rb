@@ -10,6 +10,7 @@ enabled_site_setting :lottery_enabled
 register_asset "stylesheets/lottery-modal.scss"
 register_asset "stylesheets/lottery-form.scss"
 register_asset "stylesheets/lottery-display.scss"  # 新增
+register_asset "javascripts/discourse/initializers/lottery-preview.js"
 
 # 注册图标
 register_svg_icon "dice"
