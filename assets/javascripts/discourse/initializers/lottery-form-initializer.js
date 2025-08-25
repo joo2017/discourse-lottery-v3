@@ -4,27 +4,21 @@ export default {
   name: "lottery-form-initializer",
   initialize() {
     withPluginApi("1.0.0", (api) => {
-      console.log("🎲 Lottery form initializer loaded (safe version)");
+      console.log("🎲 Lottery form initializer loaded");
       
-      // 不修改任何 Composer 方法，只监听事件
+      // 官方推荐：不需要修改 composer 或 topic 模型
+      // customFields 会自动传递到后端
+      
+      // 监听话题创建成功
       api.onAppEvent("topic:created", (topicData) => {
-        console.log("🎲 Topic created:", topicData.id);
-      });
-      
-      // 简单的全局方法（不操作 Composer）
-      window.setLotteryToComposer = function(lotteryData) {
-        console.log("🎲 Lottery data received:", lotteryData);
+        console.log("🎲 Topic created successfully:", topicData.id);
         
-        try {
-          // 只保存数据，不操作 Composer
-          window._tempLotteryData = lotteryData;
-          console.log("🎲 Data saved temporarily");
-          return true;
-        } catch (error) {
-          console.error("🎲 Error:", error);
-          return false;
-        }
-      };
+        // 延迟刷新显示结果
+        setTimeout(() => {
+          console.log("🎲 Refreshing to show lottery display");
+          window.location.reload();
+        }, 3000);
+      });
     });
   },
 };
