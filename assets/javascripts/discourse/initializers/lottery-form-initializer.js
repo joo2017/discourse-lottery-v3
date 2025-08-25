@@ -1,281 +1,273 @@
-// assets/javascripts/discourse/initializers/lottery-form-initializer.js
-// 基于官方Discourse文档的推荐方法
+// assets/javascripts/discourse/initializers/lottery-display-initializer.js
+// 纯前端的抽奖显示方案 - 实时预览，无需保存
 
 import { withPluginApi } from "discourse/lib/plugin-api";
-import { computed } from "@ember/object";
 
 export default {
-  name: "lottery-form-initializer",
+  name: "lottery-display-initializer",
   
   initialize() {
     withPluginApi("1.0.0", (api) => {
-      console.log("🎲 抽奖初始化器 - 官方推荐方法");
+      console.log("🎲 抽奖显示初始化器启动 - 纯前端方案");
 
-      // === 第一步：使用官方API注册字段序列化 ===
-      // 这是官方推荐的确保字段传递到后端的方法
-      api.serializeOnCreate('lottery_data');
-      api.serializeOnCreate('lottery_status');  
-      api.serializeOnCreate('lottery_creator_id');
-      api.serializeOnCreate('lottery_created_at');
+      // === 实时预览功能 ===
       
-      // 支持草稿保存
-      api.serializeToDraft('lottery_data');
-      api.serializeToDraft('lottery_status');
-      
-      // 支持主题编辑
-      api.serializeToTopic('lottery_data', 'topic.lottery_data');
-      api.serializeToTopic('lottery_status', 'topic.lottery_status');
-
-      console.log("🎲 已注册官方字段序列化");
-
-      // === 第二步：扩展Topic模型（前端同步） ===
-      api.modifyClass('model:topic', {
-        pluginId: 'discourse-lottery-v3-official',
-
-        // 使用computed属性（官方推荐）
-        hasLottery: computed('lottery_data', function() {
-          return this.lottery_data && Object.keys(this.lottery_data).length > 0;
-        }),
-
-        lotteryStatus: computed('lottery_status', function() {
-          return this.lottery_status || 'none';
-        }),
-
-        isLotteryActive: computed('lottery_status', function() {
-          return this.lottery_status === 'running';
-        }),
-
-        // 格式化的抽奖信息（用于显示）
-        formattedLotteryInfo: computed('lottery_data', 'lottery_status', function() {
-          const data = this.lottery_data;
-          if (!data) return null;
-          
-          return {
-            prizeName: data.prize_name,
-            drawTime: data.draw_time,
-            status: this.lottery_status,
-            isActive: this.lottery_status === 'running',
-            winnersCount: data.winners_count || 1,
-            minParticipants: data.min_participants
-          };
-        })
-      });
-
-      console.log("🎲 已扩展Topic模型");
-
-      // === 第三步：使用官方推荐的save钩子方法 ===
-      api.modifyClass("controller:composer", {
-        pluginId: "discourse-lottery-v3-official",
-
-        // 只在save方法中设置数据，不重写serialize
-        save(options) {
-          console.log("🎲 Composer save - 官方方法");
-          
-          const model = this.get("model");
-          
-          // 检查是否有抽奖数据需要保存
-          let lotteryDataToSave = this.extractLotteryData();
-          
-          if (lotteryDataToSave) {
-            console.log("🎲 发现抽奖数据，使用官方方法设置");
-            
-            // 官方推荐：直接设置到模型属性，让API序列化处理
-            model.set('lottery_data', lotteryDataToSave);
-            model.set('lottery_status', 'running');
-            model.set('lottery_creator_id', this.currentUser?.id);
-            model.set('lottery_created_at', new Date().toISOString());
-            
-            // 通知属性变更（触发官方序列化）
-            model.notifyPropertyChange('lottery_data');
-            model.notifyPropertyChange('lottery_status');
-            model.notifyPropertyChange('lottery_creator_id');
-            model.notifyPropertyChange('lottery_created_at');
-            
-            console.log("🎲 抽奖数据设置完成，交由官方API处理");
-            
-            // 清理缓存
-            this.cleanupLotteryCache();
-          }
-
-          // 调用父类方法，让官方的序列化和保存逻辑处理
-          return this._super(options).then((result) => {
-            console.log("🎲 保存成功:", result);
-            return result;
-          }).catch((error) => {
-            console.error("🎲 保存失败:", error);
-            // 如果保存失败且有抽奖数据，保留缓存以便用户重试
-            if (lotteryDataToSave) {
-              window.lotteryFormDataCache = lotteryDataToSave;
-              console.log("🎲 保存失败，已保留抽奖数据缓存");
-            }
-            throw error;
-          });
-        },
-
-        // 提取抽奖数据的辅助方法
-        extractLotteryData() {
-          let lotteryData = null;
-          
-          // 优先从缓存获取（模态框提交的数据）
-          if (window.lotteryFormDataCache) {
-            const cache = window.lotteryFormDataCache;
-            console.log("🎲 从缓存提取抽奖数据");
-            
-            // 验证缓存数据
-            if (this.validateLotteryData(cache)) {
-              lotteryData = cache;
-            } else {
-              console.warn("🎲 缓存数据验证失败");
-            }
-          }
-          
-          // 备选：从全局组件引用获取
-          else if (window.currentLotteryForm) {
-            console.log("🎲 从组件引用提取抽奖数据");
-            const componentData = window.currentLotteryForm.getLotteryData();
-            
-            if (componentData && this.validateLotteryData(componentData)) {
-              lotteryData = componentData;
-            }
-          }
-          
-          return lotteryData;
-        },
-
-        // 验证抽奖数据的辅助方法
-        validateLotteryData(data) {
-          if (!data || typeof data !== 'object') return false;
-          
-          const requiredFields = ['prize_name', 'prize_details', 'draw_time', 'min_participants'];
-          return requiredFields.every(field => 
-            data[field] !== undefined && 
-            data[field] !== null && 
-            String(data[field]).trim() !== ''
-          );
-        },
-
-        // 清理缓存的辅助方法
-        cleanupLotteryCache() {
-          window.lotteryFormDataCache = null;
-          if (window.currentLotteryForm) {
-            window.currentLotteryForm = null;
-          }
-          console.log("🎲 已清理抽奖数据缓存");
-        }
-      });
-
-      console.log("🎲 已扩展Composer控制器");
-
-      // === 第四步：应用事件监听（官方推荐） ===
-      
-      // 监听主题创建成功事件
-      api.onAppEvent('topic:created', (data) => {
-        console.log("🎲 主题创建成功事件:", data);
-        if (data && (data.lottery_data || data.hasLottery)) {
-          console.log("🎲 抽奖主题创建成功");
-          
-          // 可以在这里添加成功后的处理逻辑
-          // 比如显示成功提示、跳转等
-        }
-      });
-
-      // 监听保存错误事件
-      api.onAppEvent('composer:save-error', (error) => {
-        console.warn("🎲 保存出错:", error);
+      // 监听编辑器内容变化，实时显示抽奖卡片
+      api.decorateCooked((element, helper) => {
+        if (!element) return;
         
-        // 如果有抽奖数据，提供特殊的错误处理
-        if (window.lotteryFormDataCache) {
-          console.log("🎲 保存出错但有抽奖数据，数据已保留供重试");
-        }
-      });
-
-      // === 第五步：MessageBus监听（实时更新） ===
-      
-      // 监听抽奖相关的实时消息
-      api.onPageChange((url, title) => {
-        const topicMatch = url.match(/\/t\/[^\/]+\/(\d+)/);
-        if (topicMatch) {
-          const topicId = topicMatch[1];
-          
-          // 订阅该主题的抽奖更新消息
-          api.messageBus.subscribe(`/topic/${topicId}`, (data) => {
-            if (data.type === 'lottery_created') {
-              console.log("🎲 收到抽奖创建通知:", data);
+        // 查找抽奖占位符
+        const lotteryElements = element.querySelectorAll('p');
+        
+        lotteryElements.forEach(p => {
+          const text = p.textContent;
+          if (text.includes('[lottery]') && text.includes('[/lottery]')) {
+            console.log("🎲 发现抽奖占位符，开始处理");
+            
+            try {
+              // 解析占位符数据
+              const lotteryData = this.parseLotteryPlaceholder(text);
+              console.log("🎲 解析的数据:", lotteryData);
               
-              // 可以在这里更新UI，显示抽奖信息等
-              // 比如刷新页面或动态插入抽奖组件
+              // 生成美化HTML
+              const beautifulHtml = this.generateLotteryCard(lotteryData);
+              
+              // 替换内容
+              p.innerHTML = beautifulHtml;
+              p.classList.add('lottery-processed');
+              
+              console.log("🎲 成功替换为美化卡片");
+              
+            } catch (error) {
+              console.error("🎲 处理抽奖显示出错:", error);
             }
-          });
-        }
+          }
+        });
       });
 
-      // === 第六步：调试和监控工具（生产环境安全） ===
+      // === 主题页面的抽奖数据显示 ===
       
-      // 生产环境安全的调试工具
-      window.debugLotteryOfficial = function() {
-        const composer = api.container.lookup('controller:composer');
-        if (!composer) {
-          console.log("🎲 未找到Composer");
-          return false;
-        }
-        
-        const model = composer.get('model');
-        
-        console.log("🎲 官方方法状态检查:");
-        console.log("  📋 基本信息:");
-        console.log("    - 标题:", model.get('title'));
-        console.log("    - 内容长度:", model.get('reply')?.length || 0);
-        console.log("    - 分类:", model.get('categoryId'));
-        
-        console.log("  🎲 抽奖信息:");
-        console.log("    - lottery_data:", !!model.get('lottery_data'));
-        console.log("    - lottery_status:", model.get('lottery_status'));
-        console.log("    - 缓存数据:", !!window.lotteryFormDataCache);
-        
-        console.log("  ✅ 状态:");
-        const isReady = !!(model.get('title') && model.get('reply') && model.get('categoryId'));
-        const hasLottery = !!model.get('lottery_data');
-        
-        console.log("    - 基本字段完整:", isReady);
-        console.log("    - 包含抽奖数据:", hasLottery);
-        console.log("    - 可以发布:", isReady);
-        
-        return { isReady, hasLottery };
-      };
+      api.onPageChange(() => {
+        setTimeout(() => {
+          this.enhanceTopicLotteryDisplay();
+        }, 100);
+      });
 
-      // 验证API序列化的工具
-      window.testLotteryAPI = function() {
-        const composer = api.container.lookup('controller:composer');
-        if (!composer) return false;
-        
-        const model = composer.get('model');
-        
-        console.log("🎲 API序列化测试:");
-        
-        // 模拟设置抽奖数据
-        const testData = {
-          prize_name: "测试抽奖",
-          prize_details: "这是一个测试",
-          draw_time: new Date(Date.now() + 86400000).toISOString(),
-          min_participants: 5,
-          winners_count: 1,
-          backup_strategy: "continue"
-        };
-        
-        model.set('lottery_data', testData);
-        model.set('lottery_status', 'running');
-        model.notifyPropertyChange('lottery_data');
-        model.notifyPropertyChange('lottery_status');
-        
-        console.log("🎲 测试数据已设置，模型状态:");
-        console.log("  - lottery_data:", model.get('lottery_data'));
-        console.log("  - lottery_status:", model.get('lottery_status'));
-        
-        return true;
-      };
-
-      console.log("🎲 抽奖初始化器完成 - 官方推荐方法");
-      console.log("🎲 调试工具: window.debugLotteryOfficial(), window.testLotteryAPI()");
+      console.log("🎲 抽奖显示初始化器完成");
     });
   },
+
+  // 解析抽奖占位符数据
+  parseLotteryPlaceholder(text) {
+    const data = {
+      prize_name: '抽奖活动',
+      prize_details: '精美奖品等你来拿',
+      draw_time: '待定',
+      winners_count: 1,
+      min_participants: 1,
+      backup_strategy: 'continue',
+      additional_notes: '',
+      prize_image: '',
+      status: 'running'
+    };
+
+    // 提取[lottery]...[/lottery]之间的内容
+    const match = text.match(/\[lottery\](.*?)\[\/lottery\]/ms);
+    if (!match) return data;
+
+    const content = match[1];
+    const lines = content.split('\n');
+
+    lines.forEach(line => {
+      line = line.trim();
+      if (line.includes('：')) {
+        const [key, value] = line.split('：', 2);
+        const cleanKey = key.trim();
+        const cleanValue = value.trim();
+
+        switch (cleanKey) {
+          case '活动名称':
+            data.prize_name = cleanValue;
+            break;
+          case '奖品说明':
+            data.prize_details = cleanValue;
+            break;
+          case '开奖时间':
+            data.draw_time = cleanValue;
+            break;
+          case '获奖人数':
+            data.winners_count = parseInt(cleanValue) || 1;
+            break;
+          case '指定楼层':
+            data.specified_posts = cleanValue;
+            break;
+          case '参与门槛':
+            data.min_participants = parseInt(cleanValue.replace(/\D/g, '')) || 1;
+            break;
+          case '补充说明':
+            data.additional_notes = cleanValue;
+            break;
+          case '奖品图片':
+            data.prize_image = cleanValue;
+            break;
+          case '后备策略':
+            data.backup_strategy = cleanValue.includes('继续') ? 'continue' : 'cancel';
+            break;
+        }
+      }
+    });
+
+    return data;
+  },
+
+  // 生成美化的抽奖卡片HTML
+  generateLotteryCard(data) {
+    const statusText = this.getStatusText(data.status);
+    const statusClass = `lottery-status-${data.status}`;
+    
+    // 格式化时间
+    const formattedTime = this.formatDrawTime(data.draw_time);
+    
+    // 抽奖方式
+    const lotteryMethod = data.specified_posts ? 
+      `指定楼层 (${data.specified_posts})` : 
+      `随机抽取 ${data.winners_count} 人`;
+
+    let html = `
+      <div class="lottery-display-card ${statusClass}">
+        <div class="lottery-header">
+          <div class="lottery-title">
+            <span class="lottery-icon">🎲</span>
+            <h3>${this.escapeHtml(data.prize_name)}</h3>
+          </div>
+          <div class="lottery-status">${statusText}</div>
+        </div>
+        <div class="lottery-content">
+    `;
+
+    // 添加图片
+    if (data.prize_image) {
+      const imageUrl = data.prize_image.startsWith('//') ? 
+        `https:${data.prize_image}` : data.prize_image;
+      
+      html += `
+          <div class="lottery-image">
+            <img src="${this.escapeHtml(imageUrl)}" alt="奖品图片" loading="lazy" />
+          </div>
+      `;
+    }
+
+    // 添加详情
+    html += `
+          <div class="lottery-details">
+            <div class="lottery-detail-item">
+              <span class="label">🎁 奖品说明：</span>
+              <span class="value">${this.escapeHtml(data.prize_details)}</span>
+            </div>
+            <div class="lottery-detail-item">
+              <span class="label">⏰ 开奖时间：</span>
+              <span class="value">${this.escapeHtml(formattedTime)}</span>
+            </div>
+            <div class="lottery-detail-item">
+              <span class="label">🎯 抽奖方式：</span>
+              <span class="value">${this.escapeHtml(lotteryMethod)}</span>
+            </div>
+            <div class="lottery-detail-item">
+              <span class="label">👥 参与门槛：</span>
+              <span class="value">至少 ${data.min_participants} 人参与</span>
+            </div>
+    `;
+
+    // 添加补充说明
+    if (data.additional_notes) {
+      html += `
+            <div class="lottery-detail-item">
+              <span class="label">📝 补充说明：</span>
+              <span class="value">${this.escapeHtml(data.additional_notes)}</span>
+            </div>
+      `;
+    }
+
+    html += `
+          </div>
+        </div>
+        <div class="lottery-footer">
+          <div class="participation-tip">
+            💡 <strong>参与方式：</strong>在本话题下回复即可参与抽奖
+          </div>
+        </div>
+      </div>
+    `;
+
+    return html;
+  },
+
+  // 增强主题页面的抽奖显示（使用数据库数据）
+  enhanceTopicLotteryDisplay() {
+    try {
+      const topicController = Discourse.__container__.lookup('controller:topic');
+      if (!topicController) return;
+
+      const model = topicController.get('model');
+      if (!model || !model.lottery_data) return;
+
+      console.log("🎲 发现主题页面有抽奖数据，增强显示");
+
+      // 查找已处理的抽奖元素，用数据库数据更新
+      const processedElements = document.querySelectorAll('.lottery-processed');
+      
+      processedElements.forEach(element => {
+        try {
+          // 使用数据库中的完整数据重新渲染
+          const completeData = Object.assign({}, model.lottery_data, {
+            status: model.lottery_status || 'running'
+          });
+          
+          const enhancedHtml = this.generateLotteryCard(completeData);
+          element.innerHTML = enhancedHtml;
+          
+          console.log("🎲 已用数据库数据增强显示");
+          
+        } catch (error) {
+          console.error("🎲 增强显示出错:", error);
+        }
+      });
+
+    } catch (error) {
+      console.error("🎲 enhanceTopicLotteryDisplay 出错:", error);
+    }
+  },
+
+  // 辅助方法
+  getStatusText(status) {
+    const statusMap = {
+      'running': '🏃 进行中',
+      'finished': '🎉 已开奖', 
+      'cancelled': '❌ 已取消'
+    };
+    return statusMap[status] || '🏃 进行中';
+  },
+
+  formatDrawTime(drawTime) {
+    try {
+      const date = new Date(drawTime);
+      if (isNaN(date.getTime())) return drawTime;
+      
+      return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      return drawTime;
+    }
+  },
+
+  escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
 };
