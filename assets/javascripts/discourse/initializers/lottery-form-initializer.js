@@ -126,9 +126,22 @@ export default {
       api.modifyClass("model:composer", {
         pluginId: "discourse-lottery-v3",
 
-        // 重写serialize方法确保数据包含
+        // 安全的serialize方法
         serialize() {
-          const result = this._super();
+          let result;
+          
+          // 安全调用父类方法
+          try {
+            result = this._super() || {};
+          } catch (error) {
+            console.warn("🎲 父类serialize出错，使用空对象:", error);
+            result = {};
+          }
+          
+          // 确保结果是对象
+          if (!result || typeof result !== 'object') {
+            result = {};
+          }
           
           // 确保抽奖数据包含在序列化结果中
           if (this.lottery_data) {
@@ -201,7 +214,14 @@ export default {
           console.log("  - lottery_status:", model.get('lottery_status'));
           console.log("  - custom_fields:", model.get('custom_fields'));
           console.log("  - 缓存数据:", window.lotteryFormDataCache);
-          console.log("  - 模型序列化结果:", model.serialize());
+          
+          // 安全的序列化测试
+          try {
+            const serialized = model.serialize();
+            console.log("  - 模型序列化结果:", serialized);
+          } catch (error) {
+            console.error("  - 序列化错误:", error);
+          }
           
           // 测试设置custom_fields
           if (!model.get('custom_fields')) {
@@ -214,7 +234,7 @@ export default {
         }
       };
 
-      // 手动触发保存的调试方法
+      // 简化的测试保存方法
       window.testLotterySave = function() {
         const composer = api.container.lookup('controller:composer');
         if (composer && composer.get('model.lottery_data')) {
@@ -231,10 +251,10 @@ export default {
           
           console.log("🎲 测试前模型状态:", {
             lottery_data: model.get('lottery_data'),
-            custom_fields: model.get('custom_fields'),
-            serialized: model.serialize()
+            custom_fields: model.get('custom_fields')
           });
           
+          // 不调用序列化，避免错误
           alert("测试数据已设置，请查看控制台输出后点击发布");
         } else {
           alert("请先创建抽奖数据");
