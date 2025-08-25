@@ -33,63 +33,42 @@ class LotteryCreator
 
   def validate_data!
     Rails.logger.info "LotteryCreator: Validating data"
-    Rails.logger.info "LotteryCreator: Raw data: #{@data}"
     
     required_fields = ['prize_name', 'prize_details', 'draw_time']
     missing_fields = required_fields.select { |field| @data[field].blank? }
     
     if missing_fields.any?
-      error_msg = "缺少必填字段: #{missing_fields.join(', ')}"
-      Rails.logger.error "LotteryCreator: #{error_msg}"
-      raise error_msg
+      raise "缺少必填字段: #{missing_fields.join(', ')}"
     end
 
-    # 验证最小参与人数 - 修复这里的逻辑
+    # 验证最小参与人数
     global_min = SiteSetting.lottery_min_participants_global
-    min_participants = @data['min_participants']
-    
-    Rails.logger.info "LotteryCreator: Global min: #{global_min}, User input: #{min_participants} (#{min_participants.class})"
-    
-    # 确保转换为整数进行比较
-    user_min = min_participants.to_i
-    global_min_int = global_min.to_i
-    
-    Rails.logger.info "LotteryCreator: Comparing #{user_min} >= #{global_min_int}"
-    
-    if user_min < global_min_int
-      error_msg = "参与门槛不能低于#{global_min_int}人"
-      Rails.logger.error "LotteryCreator: #{error_msg}"
-      raise error_msg
+    min_participants = @data['min_participants'].to_i
+    if min_participants < global_min
+      raise "参与门槛不能低于#{global_min}人"
     end
 
     # 验证开奖时间
     begin
       draw_time = DateTime.parse(@data['draw_time'])
       if draw_time <= DateTime.current
-        error_msg = "开奖时间必须是未来时间"
-        Rails.logger.error "LotteryCreator: #{error_msg}"
-        raise error_msg
+        raise "开奖时间必须是未来时间"
       end
-    rescue ArgumentError => e
-      error_msg = "开奖时间格式无效: #{e.message}"
-      Rails.logger.error "LotteryCreator: #{error_msg}"
-      raise error_msg
+    rescue ArgumentError
+      raise "开奖时间格式无效"
     end
     
     Rails.logger.info "LotteryCreator: Data validation passed"
   end
 
   def determine_lottery_type!
-    Rails.logger.info "LotteryCreator: Determining lottery type"
-    Rails.logger.info "LotteryCreator: Specified posts value: '#{@data['specified_posts']}'"
-    
-    if @data['specified_posts'].present? && @data['specified_posts'].strip.present?
+    if @data['specified_posts'].present?
       @lottery_type = 'specified'
       # 解析指定楼层
       posts = @data['specified_posts'].split(',').map(&:strip).select(&:present?)
       @specified_post_numbers = posts.join(',')
       @winners_count = posts.length
-      Rails.logger.info "LotteryCreator: Determined type as 'specified' with posts: #{@specified_post_numbers}, winners: #{@winners_count}"
+      Rails.logger.info "LotteryCreator: Determined type as 'specified' with posts: #{@specified_post_numbers}"
     else
       @lottery_type = 'random'
       @specified_post_numbers = nil
@@ -101,7 +80,7 @@ class LotteryCreator
   def create_lottery_record!
     Rails.logger.info "LotteryCreator: Creating lottery record"
     
-    lottery_params = {
+    lottery = Lottery.create!(
       topic_id: @topic.id,
       post_id: @post.id,
       user_id: @user.id,
@@ -114,11 +93,7 @@ class LotteryCreator
       lottery_type: @lottery_type,
       specified_post_numbers: @specified_post_numbers,
       status: 'running'
-    }
-    
-    Rails.logger.info "LotteryCreator: Creating with params: #{lottery_params}"
-    
-    lottery = Lottery.create!(lottery_params)
+    )
     
     Rails.logger.info "LotteryCreator: Created lottery record with ID #{lottery.id}"
     lottery
@@ -151,7 +126,7 @@ class LotteryCreator
 
   def build_lottery_info_text(lottery)
     info = <<~TEXT
-      ## 🎲 抽奖活动已创建
+      ## 🎲 抽奖活动信息
 
       **活动名称：** #{lottery.prize_name}
       **奖品说明：** #{lottery.prize_details}
@@ -171,8 +146,7 @@ class LotteryCreator
 
     info += "---\n\n"
     info += "💡 **参与方式：** 在本话题下回复即可参与抽奖\n\n"
-    info += "🏷️ **活动状态：** 进行中\n\n"
-    info += "📊 **抽奖记录ID：** #{lottery.id}"
+    info += "🏷️ **活动状态：** 进行中"
 
     info
   end
