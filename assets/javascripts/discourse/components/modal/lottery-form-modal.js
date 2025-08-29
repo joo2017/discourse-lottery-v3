@@ -1,8 +1,9 @@
 import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
-import { service } from "@ember/service"; // 修复：使用 service 而不是 inject
+import { inject as service } from "@ember/service";
 import { isBlank, isPresent } from "@ember/utils";
+import { ajax } from "discourse/lib/ajax";
 
 export default class LotteryFormModal extends Component {
   @service modal;
@@ -208,7 +209,7 @@ export default class LotteryFormModal extends Component {
     delete this.validationErrors.additionalNotes;
   }
 
-  // 处理图片上传
+  // 处理图片上传 - 修正版本
   @action
   async handleImageUpload(event) {
     const file = event.target.files[0];
@@ -237,31 +238,24 @@ export default class LotteryFormModal extends Component {
       };
       reader.readAsDataURL(file);
 
-      // 使用 Discourse 的上传 API
+      // 使用 discourse/lib/ajax 进行上传
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('type', 'composer');
+      formData.append('upload_type', 'composer'); // 修正：使用 upload_type 而不是 type
 
-      // 获取 CSRF token
-      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-      
-      const response = await fetch('/uploads.json', {
+      const response = await ajax('/uploads.json', {
         method: 'POST',
-        body: formData,
-        headers: {
-          'X-CSRF-Token': csrfToken || '',
-          'X-Requested-With': 'XMLHttpRequest'
-        }
+        data: formData,
+        processData: false,
+        contentType: false
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        this.prizeImage = data.url;
+      if (response && response.url) {
+        this.prizeImage = response.url;
         console.log("🎲 图片上传成功:", this.prizeImage);
         this.showFlash("图片上传成功", "success");
       } else {
-        const errorData = await response.text();
-        throw new Error(`上传失败: ${response.status} - ${errorData}`);
+        throw new Error('上传响应格式错误');
       }
     } catch (error) {
       console.error("🎲 图片上传失败:", error);
@@ -285,7 +279,7 @@ export default class LotteryFormModal extends Component {
     console.log("🎲 移除图片");
   }
 
-  // 提交表单
+  // 提交表单 - 修正版本
   @action
   async submit() {
     console.log("🎲 开始提交抽奖表单");
@@ -317,18 +311,29 @@ export default class LotteryFormModal extends Component {
 
       console.log("🎲 构建的抽奖数据对象:", lotteryData);
 
-      // 构建完整的占位符内容
-      const placeholder = this.buildLotteryPlaceholder(lotteryData);
-      
-      // 获取编辑器并插入内容
+      // 将抽奖数据保存到 composer model 的 custom_fields
       const composer = this.args.model?.composer;
       console.log("🎲 获取编辑器实例:", composer);
       
       if (composer && composer.get) {
-        const currentText = composer.get("model.reply") || "";
-        composer.set("model.reply", currentText + placeholder);
+        const model = composer.get("model");
+        
+        // 确保 custom_fields 存在
+        if (!model.custom_fields) {
+          model.set("custom_fields", {});
+        }
+        
+        // 保存抽奖数据到 custom_fields
+        model.set("custom_fields.lottery", JSON.stringify(lotteryData));
+        model.notifyPropertyChange("custom_fields");
+        
+        // 构建并插入显示内容
+        const placeholder = this.buildLotteryPlaceholder(lotteryData);
+        const currentText = model.get("reply") || "";
+        model.set("reply", currentText + placeholder);
 
         console.log("🎲 抽奖内容成功插入到编辑器");
+        console.log("🎲 Custom fields 已保存:", model.custom_fields);
         
         // 显示成功消息
         this.showFlash("抽奖信息已插入编辑器", "success");
@@ -363,30 +368,4 @@ export default class LotteryFormModal extends Component {
       placeholder += `指定楼层：${lotteryData.specified_posts}\n`;
     } else {
       placeholder += `抽奖方式：随机抽取\n`;
-      placeholder += `获奖人数：${lotteryData.winners_count}\n`;
-    }
-    
-    placeholder += `参与门槛：${lotteryData.min_participants}人\n`;
-    
-    // 补充说明（如果有）
-    if (lotteryData.additional_notes && lotteryData.additional_notes.trim()) {
-      placeholder += `补充说明：${lotteryData.additional_notes}\n`;
-    }
-    
-    // 奖品图片（如果有）
-    if (lotteryData.prize_image && lotteryData.prize_image.trim()) {
-      placeholder += `奖品图片：${lotteryData.prize_image}\n`;
-    }
-    
-    placeholder += `[/lottery]\n\n`;
-    
-    return placeholder;
-  }
-
-  // 取消操作
-  @action
-  cancel() {
-    console.log("🎲 用户取消抽奖表单");
-    this.args.closeModal();
-  }
-}
+      placeholder += `
