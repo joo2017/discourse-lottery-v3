@@ -1,27 +1,24 @@
 # name: discourse-lottery-v3
 # about: A comprehensive and robust lottery plugin for Discourse, based on the V3 blueprint.
-# version: 0.1.0
+# version: 0.1.1
 # authors: [Your Name]
 # url: [Your GitHub Repo URL]
 
 enabled_site_setting :lottery_enabled
 
-# 注册资源文件
 register_asset "stylesheets/lottery-modal.scss"
 register_asset "stylesheets/lottery-form.scss"
 register_asset "stylesheets/lottery-display.scss"
 
-# 注册图标
 register_svg_icon "dice"
 
 after_initialize do
   Rails.logger.info "LotteryPlugin: Starting initialization"
 
   # ===================================================================
-  # 扩展序列化器 (修正: 移动到 after_initialize 内部)
+  # 扩展序列化器 (修正: 增加对nil数据的安全处理)
   # ===================================================================
   add_to_serializer(:topic_view, :lottery_data) do
-    # 使用 object.topic 确保我们获取的是 Topic 模型
     lottery = object.topic.lotteries.first
     return nil unless lottery
 
@@ -29,7 +26,7 @@ after_initialize do
       id: lottery.id,
       prize_name: lottery.prize_name,
       prize_details: lottery.prize_details,
-      draw_time: lottery.draw_time.iso8601,
+      draw_time: lottery.draw_time&.iso8601, # <--- 关键修正
       winners_count: lottery.winners_count,
       min_participants: lottery.min_participants,
       backup_strategy: lottery.backup_strategy,
@@ -46,15 +43,16 @@ after_initialize do
   end
 
   add_to_serializer(:post, :lottery_data) do
-    # 确保 post.topic 存在，并且只在首帖添加数据
     return nil unless post&.topic && post.post_number == 1 && post.topic.lotteries.exists?
     
     lottery = post.topic.lotteries.first
+    return nil unless lottery
+
     {
       id: lottery.id,
       prize_name: lottery.prize_name,
       prize_details: lottery.prize_details,
-      draw_time: lottery.draw_time.iso8601,
+      draw_time: lottery.draw_time&.iso8601, # <--- 关键修正
       winners_count: lottery.winners_count,
       min_participants: lottery.min_participants,
       backup_strategy: lottery.backup_strategy,
@@ -71,6 +69,8 @@ after_initialize do
   end
 
   Rails.logger.info "LotteryPlugin: Serializers extended"
+  
+  # ... 此处省略和上次完全相同的代码 ...
   
   # 加载模型和服务
   begin
@@ -90,14 +90,11 @@ after_initialize do
   Rails.logger.info "LotteryPlugin: Added lotteries association to Topic"
 
   Post.class_eval do
-    # 注意：一个抽奖应该只关联一个Post（首帖），但一个Post可以有多个lotteries吗？
-    # 理论上一个主题只有一个抽奖，所以关联到Topic更合理。这里的关联可以保留，但业务逻辑要清晰。
     has_many :lotteries, dependent: :destroy
   end
   Rails.logger.info "LotteryPlugin: Added lotteries association to Post"
 
   User.class_eval do
-    # 这里的关联表示一个用户可以发起多个抽奖
     has_many :lotteries, foreign_key: :user_id, dependent: :destroy
   end
   Rails.logger.info "LotteryPlugin: Added lotteries association to User"
@@ -108,7 +105,6 @@ after_initialize do
     
     Rails.logger.info "LotteryPlugin: Topic created #{topic.id}, checking for lottery data"
     
-    # 从 params 中获取 custom_fields，这比从 topic.custom_fields 更可靠，因为此时可能还未完全保存
     lottery_data_json = params[:custom_fields]&.[]('lottery')
     
     if lottery_data_json.present?
@@ -118,7 +114,6 @@ after_initialize do
         lottery_data = JSON.parse(lottery_data_json)
         Rails.logger.info "LotteryPlugin: Parsed lottery data: #{lottery_data.inspect}"
         
-        # 延迟处理，确保话题完全创建完成
         Jobs.enqueue_in(2.seconds, :create_lottery, {
           topic_id: topic.id,
           lottery_data: lottery_data,
@@ -129,7 +124,6 @@ after_initialize do
       rescue JSON::ParserError => e
         Rails.logger.error "LotteryPlugin: Failed to parse lottery JSON: #{e.message}"
         
-        # 在话题中发布错误信息
         Jobs.enqueue_in(5.seconds, :post_lottery_error, {
           topic_id: topic.id,
           error_message: "抽奖数据格式错误，请重新创建抽奖"
@@ -152,7 +146,6 @@ after_initialize do
     
     Rails.logger.info "LotteryPlugin: Lottery post edited, checking for updates"
     
-    # 检查是否在后悔期内
     lock_delay = SiteSetting.lottery_post_lock_delay_minutes.minutes
     if lottery.created_at + lock_delay > Time.current
       Rails.logger.info "LotteryPlugin: Post edit within regret period, updating lottery"
@@ -232,10 +225,8 @@ after_initialize do
         
         begin
           lottery = Lottery.find(lottery_id)
-          # 应该锁定 post 而不是 topic
           post = lottery.post
           
-          # 使用 PostGuard 来锁定帖子
           Guardian.new(Discourse.system_user).ensure_can_lock!(post)
           post.update_locked(Discourse.system_user, true)
 
