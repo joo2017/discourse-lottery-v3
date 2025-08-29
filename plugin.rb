@@ -1,6 +1,6 @@
 # name: discourse-lottery-v3
 # about: A comprehensive and robust lottery plugin for Discourse, based on the V3 blueprint.
-# version: 0.1.1
+# version: 0.1.2
 # authors: [Your Name]
 # url: [Your GitHub Repo URL]
 
@@ -16,9 +16,14 @@ after_initialize do
   Rails.logger.info "LotteryPlugin: Starting initialization"
 
   # ===================================================================
-  # 扩展序列化器 (修正: 增加对nil数据的安全处理)
+  # 扩展序列化器 (修正: 使用现代的 include_condition 语法并修复上下文变量)
   # ===================================================================
-  add_to_serializer(:topic_view, :lottery_data) do
+  
+  # 扩展 TopicViewSerializer
+  add_to_serializer(:topic_view, :lottery_data, include_condition: -> {
+    # `object` 在这里是 TopicView 的实例, `object.topic` 才是 Topic 模型
+    object.topic&.lotteries&.exists?
+  }) do
     lottery = object.topic.lotteries.first
     return nil unless lottery
 
@@ -26,7 +31,7 @@ after_initialize do
       id: lottery.id,
       prize_name: lottery.prize_name,
       prize_details: lottery.prize_details,
-      draw_time: lottery.draw_time&.iso8601, # <--- 关键修正
+      draw_time: lottery.draw_time&.iso8601,
       winners_count: lottery.winners_count,
       min_participants: lottery.min_participants,
       backup_strategy: lottery.backup_strategy,
@@ -38,21 +43,19 @@ after_initialize do
     }
   end
 
-  add_to_serializer(:topic_view, :include_lottery_data?) do
-    object.topic.lotteries.exists?
-  end
-
-  add_to_serializer(:post, :lottery_data) do
-    return nil unless post&.topic && post.post_number == 1 && post.topic.lotteries.exists?
-    
-    lottery = post.topic.lotteries.first
+  # 扩展 PostSerializer
+  add_to_serializer(:post, :lottery_data, include_condition: -> {
+    # `object` 在这里是 Post 的实例
+    object.post_number == 1 && object.topic&.lotteries&.exists?
+  }) do
+    lottery = object.topic.lotteries.first
     return nil unless lottery
 
     {
       id: lottery.id,
       prize_name: lottery.prize_name,
       prize_details: lottery.prize_details,
-      draw_time: lottery.draw_time&.iso8601, # <--- 关键修正
+      draw_time: lottery.draw_time&.iso8601,
       winners_count: lottery.winners_count,
       min_participants: lottery.min_participants,
       backup_strategy: lottery.backup_strategy,
@@ -63,12 +66,11 @@ after_initialize do
       prize_image: lottery.prize_image
     }
   end
+  
+  # 注意: 使用 include_condition 后，就不再需要单独的 include_lottery_data? 定义了。
+  # 我们已经将旧的、分离的两个 add_to_serializer 调用合并成了一个。
 
-  add_to_serializer(:post, :include_lottery_data?) do
-    post&.topic && post.post_number == 1 && post.topic.lotteries.exists?
-  end
-
-  Rails.logger.info "LotteryPlugin: Serializers extended"
+  Rails.logger.info "LotteryPlugin: Serializers extended with modern syntax"
   
   # ... 此处省略和上次完全相同的代码 ...
   
