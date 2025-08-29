@@ -23,7 +23,7 @@ export default {
         );
         
         if (hasLotteryTag) {
-          console.log("🎲 检测到抽奖主题编辑");
+          console.log("检测到抽奖主题编辑");
           
           // 检查是否在后悔期内
           const post = model.get("post");
@@ -77,14 +77,14 @@ export default {
             );
             
             if (hasLotteryTag) {
-              console.log("🎲 保存抽奖主题编辑");
+              console.log("保存抽奖主题编辑");
               
               // 检查内容中是否有新的抽奖数据
               const content = model.get("reply");
               const lotteryMatch = content.match(/\[lottery\](.*?)\[\/lottery\]/s);
               
               if (lotteryMatch) {
-                console.log("🎲 检测到编辑后的抽奖内容");
+                console.log("检测到编辑后的抽奖内容");
                 
                 // 解析抽奖数据并保存到 custom_fields
                 const lotteryContent = lotteryMatch[1];
@@ -97,7 +97,7 @@ export default {
                   model.set("custom_fields.lottery", JSON.stringify(parsedData));
                   model.notifyPropertyChange("custom_fields");
                   
-                  console.log("🎲 已更新编辑后的抽奖数据到 custom_fields");
+                  console.log("已更新编辑后的抽奖数据到 custom_fields");
                 }
               }
             }
