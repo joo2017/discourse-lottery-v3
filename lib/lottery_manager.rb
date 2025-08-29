@@ -78,7 +78,11 @@ class LotteryManager
     Rails.logger.error "LotteryManager: #{e.backtrace.join("\n")}"
     
     # 标记为失败状态
-    lottery.update!(status: 'cancelled')
+    begin
+      lottery.update!(status: 'cancelled')
+    rescue => update_error
+      Rails.logger.error "LotteryManager: Failed to update lottery status: #{update_error.message}"
+    end
     
     return { success: false, reason: 'execution_error', error: e.message }
   end
@@ -88,8 +92,14 @@ class LotteryManager
   def calculate_valid_participants
     Rails.logger.debug "LotteryManager: Calculating valid participants"
     
-    # 获取排除的用户组ID
-    excluded_group_ids = SiteSetting.lottery_excluded_groups.split('|').map(&:to_i).select { |id| id > 0 }
+    # 获取排除的用户组ID - 修复空字符串问题
+    excluded_groups_setting = SiteSetting.lottery_excluded_groups || ""
+    excluded_group_ids = excluded_groups_setting.split('|')
+                                               .map(&:strip)
+                                               .map(&:to_i)
+                                               .select { |id| id > 0 }
+    
+    Rails.logger.debug "LotteryManager: Excluded group IDs: #{excluded_group_ids}"
     
     # 构建基础查询
     posts_query = lottery.topic.posts
@@ -99,23 +109,47 @@ class LotteryManager
                          .where.not(hidden: true)          # 排除隐藏帖子
                          .joins(:user)                     # 关联用户表
                          .where(users: { active: true })   # 只包含活跃用户
-    
+
     # 排除被禁用户组的成员
     if excluded_group_ids.any?
-      excluded_user_ids = GroupUser.where(group_id: excluded_group_ids).pluck(:user_id).uniq
-      if excluded_user_ids.any?
-        posts_query = posts_query.where.not(user_id: excluded_user_ids)
+      begin
+        excluded_user_ids = GroupUser.where(group_id: excluded_group_ids).pluck(:user_id).uniq
+        Rails.logger.debug "LotteryManager: Found #{excluded_user_ids.length} users in excluded groups"
+        
+        if excluded_user_ids.any?
+          posts_query = posts_query.where.not(user_id: excluded_user_ids)
+        end
+      rescue => e
+        Rails.logger.warn "LotteryManager: Error excluding group users: #{e.message}"
+        # 继续执行，不让这个错误阻止抽奖
       end
     end
 
-    # 按用户分组，取每个用户最早的有效回复作为参与凭证
-    user_first_posts = posts_query.select('DISTINCT ON (posts.user_id) posts.user_id, posts.created_at, posts.post_number')
-                                 .order('posts.user_id, posts.created_at ASC')
-
-    # 返回参与用户列表，按参与时间排序
-    User.joins("INNER JOIN (#{user_first_posts.to_sql}) first_posts ON users.id = first_posts.user_id")
-        .select('users.*, first_posts.post_number, first_posts.created_at as participation_time')
-        .order('first_posts.created_at ASC')
+    # 使用子查询来获取每个用户最早的有效回复
+    # 这样可以确保每个用户只算一次，并且得到正确的post_number
+    begin
+      subquery = posts_query.select('user_id, MIN(created_at) as first_post_time, MIN(post_number) as first_post_number')
+                           .group(:user_id)
+      
+      # 获取用户信息和他们的首次参与信息
+      participants = User.joins("INNER JOIN (#{subquery.to_sql}) first_posts ON users.id = first_posts.user_id")
+                         .select('users.*, first_posts.first_post_number as post_number, first_posts.first_post_time as participation_time')
+                         .order('first_posts.first_post_time ASC')
+      
+      Rails.logger.debug "LotteryManager: Found #{participants.count} valid participants"
+      participants
+    rescue => e
+      Rails.logger.error "LotteryManager: Error in participant calculation: #{e.message}"
+      # 回退到简单查询
+      fallback_participants = posts_query.includes(:user)
+                                        .group(:user_id)
+                                        .order(:created_at)
+                                        .map(&:user)
+                                        .compact
+      
+      Rails.logger.debug "LotteryManager: Using fallback method, found #{fallback_participants.length} participants"
+      fallback_participants
+    end
   end
 
   def execute_actual_draw(participants)
@@ -165,9 +199,11 @@ class LotteryManager
     
     # 建立楼层号到参与者的映射
     participants.each do |participant|
-      post_number = participant.post_number
-      participants_by_post[post_number] = participant
+      post_number = participant.respond_to?(:post_number) ? participant.post_number : participant.first_post_number
+      participants_by_post[post_number] = participant if post_number
     end
+    
+    Rails.logger.debug "LotteryManager: Participant post mapping: #{participants_by_post.keys}"
     
     winners = []
     valid_numbers = []
@@ -177,6 +213,7 @@ class LotteryManager
       if participants_by_post[post_number]
         winners << participants_by_post[post_number]
         valid_numbers << post_number
+        Rails.logger.debug "LotteryManager: Found valid participant for post #{post_number}"
       else
         Rails.logger.warn "LotteryManager: Specified post #{post_number} not found or invalid"
       end
@@ -207,11 +244,16 @@ class LotteryManager
     
     announcement = build_winner_announcement(winners)
     
-    PostCreator.create!(
-      Discourse.system_user,
-      topic_id: lottery.topic_id,
-      raw: announcement
-    )
+    begin
+      PostCreator.create!(
+        Discourse.system_user,
+        topic_id: lottery.topic_id,
+        raw: announcement
+      )
+    rescue => e
+      Rails.logger.error "LotteryManager: Failed to publish winner announcement: #{e.message}"
+      raise e
+    end
   end
 
   def publish_insufficient_but_continued_announcement(winners, actual_count)
@@ -219,7 +261,7 @@ class LotteryManager
     
     announcement = "## 🎉 开奖结果\n\n"
     announcement += "**活动名称：** #{lottery.prize_name}\n"
-    announcement += "**开奖时间：** #{lottery.draw_time.strftime('%Y年%m月%d日 %H:%M')}\n\n"
+    announcement += "**开奖时间：** #{format_time(lottery.draw_time)}\n\n"
     announcement += "⚠️ **特别说明：** 实际参与人数为 #{actual_count} 人，少于设定门槛 #{lottery.min_participants} 人，但根据活动设置继续开奖。\n\n"
     
     if lottery.specified_type?
@@ -242,18 +284,23 @@ class LotteryManager
     announcement += "\n---\n\n"
     announcement += "🎊 恭喜以上中奖者！请及时联系活动发起者领取奖品。"
     
-    PostCreator.create!(
-      Discourse.system_user,
-      topic_id: lottery.topic_id,
-      raw: announcement
-    )
+    begin
+      PostCreator.create!(
+        Discourse.system_user,
+        topic_id: lottery.topic_id,
+        raw: announcement
+      )
+    rescue => e
+      Rails.logger.error "LotteryManager: Failed to publish insufficient announcement: #{e.message}"
+      raise e
+    end
   end
 
   def build_winner_announcement(winners)
     announcement = "## 🎉 开奖结果\n\n"
     announcement += "**活动名称：** #{lottery.prize_name}\n"
-    announcement += "**开奖时间：** #{lottery.draw_time.strftime('%Y年%m月%d日 %H:%M')}\n"
-    announcement += "**参与人数：** #{lottery.participants_count} 人\n\n"
+    announcement += "**开奖时间：** #{format_time(lottery.draw_time)}\n"
+    announcement += "**参与人数：** #{calculate_valid_participants.count} 人\n\n"
     
     if lottery.specified_type?
       announcement += "**中奖方式：** 指定楼层\n"
@@ -296,6 +343,7 @@ class LotteryManager
         Rails.logger.debug "LotteryManager: Sent notification to #{winner.username}"
       rescue => e
         Rails.logger.error "LotteryManager: Failed to send notification to #{winner.username}: #{e.message}"
+        # 继续处理其他用户，不要因为一个用户的通知失败而停止整个流程
       end
     end
   end
@@ -304,10 +352,16 @@ class LotteryManager
     message = "恭喜您在抽奖活动中获奖！\n\n"
     message += "**活动名称：** #{lottery.prize_name}\n"
     message += "**奖品说明：** #{lottery.prize_details}\n"
-    message += "**开奖时间：** #{lottery.draw_time.strftime('%Y年%m月%d日 %H:%M')}\n"
+    message += "**开奖时间：** #{format_time(lottery.draw_time)}\n"
     message += "**活动发起者：** @#{lottery.user.username}\n\n"
     message += "请及时联系活动发起者领取您的奖品。\n\n"
-    message += "[点击查看抽奖主题](#{Discourse.base_url}/t/#{lottery.topic.slug}/#{lottery.topic_id})"
+    
+    begin
+      message += "[点击查看抽奖主题](#{Discourse.base_url}/t/#{lottery.topic.slug}/#{lottery.topic_id})"
+    rescue => e
+      Rails.logger.warn "LotteryManager: Could not generate topic URL: #{e.message}"
+      message += "[抽奖主题](#{Discourse.base_url}/t/#{lottery.topic_id})"
+    end
     
     message
   end
@@ -319,18 +373,23 @@ class LotteryManager
     
     announcement = "## ❌ 活动取消\n\n"
     announcement += "**活动名称：** #{lottery.prize_name}\n"
-    announcement += "**原定开奖时间：** #{lottery.draw_time.strftime('%Y年%m月%d日 %H:%M')}\n"
-    announcement += "**取消时间：** #{Time.current.strftime('%Y年%m月%d日 %H:%M')}\n"
+    announcement += "**原定开奖时间：** #{format_time(lottery.draw_time)}\n"
+    announcement += "**取消时间：** #{format_time(Time.current)}\n"
     announcement += "**取消原因：** 参与人数不足\n"
     announcement += "**需要人数：** #{lottery.min_participants} 人\n"
     announcement += "**实际人数：** #{participant_count} 人\n\n"
     announcement += "感谢大家的关注和参与，期待下次活动！"
     
-    PostCreator.create!(
-      Discourse.system_user,
-      topic_id: lottery.topic_id,
-      raw: announcement
-    )
+    begin
+      PostCreator.create!(
+        Discourse.system_user,
+        topic_id: lottery.topic_id,
+        raw: announcement
+      )
+    rescue => e
+      Rails.logger.error "LotteryManager: Failed to post cancellation announcement: #{e.message}"
+      raise e
+    end
     
     update_topic_tag('已取消')
   end
@@ -344,21 +403,33 @@ class LotteryManager
       # 移除旧的抽奖相关标签
       old_tags = ['抽奖中', '已开奖', '已取消']
       old_tags.each do |tag_name|
-        tag = Tag.find_by(name: tag_name)
-        if tag && topic.tags.include?(tag)
-          topic.tags.delete(tag)
+        begin
+          tag = Tag.find_by(name: tag_name)
+          if tag && topic.tags.include?(tag)
+            topic.tags.delete(tag)
+          end
+        rescue => e
+          Rails.logger.warn "LotteryManager: Error removing tag #{tag_name}: #{e.message}"
         end
       end
       
       # 添加新标签
-      new_tag = Tag.find_or_create_by!(name: new_tag_name)
-      topic.tags << new_tag unless topic.tags.include?(new_tag)
-      
-      topic.save!
-      
-      Rails.logger.debug "LotteryManager: Updated tag successfully"
+      begin
+        new_tag = Tag.find_or_create_by!(name: new_tag_name) do |tag|
+          tag.target_tag_id = nil
+          tag.public_topic_count = 0
+        end
+        topic.tags << new_tag unless topic.tags.include?(new_tag)
+        
+        topic.save!
+        
+        Rails.logger.debug "LotteryManager: Updated tag successfully"
+      rescue => e
+        Rails.logger.warn "LotteryManager: Error adding new tag: #{e.message}"
+      end
     rescue => e
-      Rails.logger.warn "LotteryManager: Failed to update tag: #{e.message}"
+      Rails.logger.warn "LotteryManager: Failed to update topic tag: #{e.message}"
+      # 不要因为标签更新失败而中断整个流程
     end
   end
 
@@ -372,6 +443,17 @@ class LotteryManager
       Rails.logger.debug "LotteryManager: Topic locked successfully"
     rescue => e
       Rails.logger.warn "LotteryManager: Failed to lock topic: #{e.message}"
+      # 不要因为锁定失败而中断整个流程
     end
+  end
+
+  private
+
+  def format_time(time)
+    return '' unless time
+    time.strftime('%Y年%m月%d日 %H:%M')
+  rescue => e
+    Rails.logger.warn "LotteryManager: Error formatting time: #{e.message}"
+    time.to_s
   end
 end
