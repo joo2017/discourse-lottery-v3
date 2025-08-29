@@ -357,15 +357,37 @@ export default class LotteryFormModal extends Component {
   }
 
   buildLotteryPlaceholder(lotteryData) {
-    let placeholder = `\n[lottery]\n`;
+    let placeholder = "\n[lottery]\n";
     placeholder += `活动名称：${lotteryData.prize_name}\n`;
     placeholder += `奖品说明：${lotteryData.prize_details}\n`;
     placeholder += `开奖时间：${lotteryData.draw_time}\n`;
     
     // 智能判断抽奖方式
     if (lotteryData.specified_posts && lotteryData.specified_posts.trim()) {
-      placeholder += `抽奖方式：指定楼层\n`;
+      placeholder += "抽奖方式：指定楼层\n";
       placeholder += `指定楼层：${lotteryData.specified_posts}\n`;
     } else {
-      placeholder += `抽奖方式：随机抽取\n`;
-      placeholder += ``
+      placeholder += "抽奖方式：随机抽取\n";
+      placeholder += `获奖人数：${lotteryData.winners_count}\n`;
+    }
+    
+    placeholder += `参与门槛：至少${lotteryData.min_participants}人参与\n`;
+    
+    if (lotteryData.additional_notes && lotteryData.additional_notes.trim()) {
+      placeholder += `补充说明：${lotteryData.additional_notes}\n`;
+    }
+    
+    if (lotteryData.prize_image && lotteryData.prize_image.trim()) {
+      placeholder += `奖品图片：${lotteryData.prize_image}\n`;
+    }
+    
+    placeholder += "[/lottery]\n\n";
+    
+    return placeholder;
+  }
+
+  @action
+  cancel() {
+    this.args.closeModal();
+  }
+}
