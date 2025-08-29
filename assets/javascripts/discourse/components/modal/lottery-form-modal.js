@@ -1,7 +1,7 @@
 import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
-import { inject as service } from "@ember/service";
+import { service } from "@ember/service"; // 修复：使用 service 而不是 inject
 import { isBlank, isPresent } from "@ember/utils";
 
 export default class LotteryFormModal extends Component {
