@@ -1,6 +1,5 @@
 // assets/javascripts/discourse/components/lottery-display.js
 import Component from "@glimmer/component";
-import { tracked } from "@glimmer/tracking";
 
 export default class LotteryDisplayComponent extends Component {
   get lotteryData() {
@@ -8,7 +7,8 @@ export default class LotteryDisplayComponent extends Component {
   }
 
   get isSpecifiedType() {
-    return this.lotteryData.specified_posts && this.lotteryData.specified_posts.trim();
+    return this.lotteryData.lottery_type === 'specified' || 
+           (this.lotteryData.specified_posts && this.lotteryData.specified_posts.trim());
   }
 
   get formattedDrawTime() {
