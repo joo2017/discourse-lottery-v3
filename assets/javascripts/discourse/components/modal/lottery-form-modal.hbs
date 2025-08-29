@@ -1,0 +1,196 @@
+<DModal
+  @title="创建抽奖活动"
+  @closeModal={{this.cancel}}
+  @flash={{this.flash}}
+  @flashType={{this.flashType}}
+  class="lottery-form-modal"
+>
+  <:body>
+    <div class="lottery-form">
+      <div class="lottery-form-header">
+        <p class="lottery-form-description">
+          填写抽奖活动信息，系统将自动在主题中显示抽奖详情并在指定时间开奖。
+        </p>
+      </div>
+
+      <div class="lottery-form-body">
+        {{! 活动名称 }}
+        <div class="control-group">
+          <label class="control-label">活动名称 <span class="required">*</span></label>
+          <div class="controls">
+            <input 
+              value={{this.prizeName}}
+              {{on "input" this.updatePrizeName}}
+              class="lottery-input"
+              placeholder="例如：iPhone 15 Pro 抽奖"
+              type="text"
+              maxlength="100"
+            />
+          </div>
+        </div>
+
+        {{! 奖品说明 }}
+        <div class="control-group">
+          <label class="control-label">奖品说明 <span class="required">*</span></label>
+          <div class="controls">
+            <textarea 
+              value={{this.prizeDetails}}
+              {{on "input" this.updatePrizeDetails}}
+              class="lottery-textarea"
+              placeholder="详细描述奖品内容，如颜色、规格、数量等"
+              maxlength="500"
+              rows="3"
+            ></textarea>
+          </div>
+        </div>
+
+        {{! 奖品图片上传 }}
+        <div class="control-group">
+          <label class="control-label">奖品图片（可选）</label>
+          <div class="controls">
+            <div class="lottery-image-upload">
+              <input 
+                type="file"
+                accept="image/*"
+                {{on "change" this.handleImageUpload}}
+                class="lottery-file-input"
+                id="lottery-image-upload"
+              />
+              <label for="lottery-image-upload" class="lottery-upload-btn">
+                {{#if this.isImageUploading}}
+                  上传中...
+                {{else if this.prizeImagePreview}}
+                  重新选择图片
+                {{else}}
+                  选择图片
+                {{/if}}
+              </label>
+              {{#if this.prizeImagePreview}}
+                <div class="lottery-image-preview">
+                  <img src={{this.prizeImagePreview}} alt="奖品图片预览" />
+                  <button type="button" {{on "click" this.removeImage}} class="remove-image-btn">×</button>
+                </div>
+              {{/if}}
+            </div>
+            <div class="help-text">支持 JPG、PNG、GIF 格式，文件大小不超过 3MB</div>
+          </div>
+        </div>
+
+        {{! 开奖时间 }}
+        <div class="control-group">
+          <label class="control-label">开奖时间 <span class="required">*</span></label>
+          <div class="controls">
+            <input 
+              value={{this.drawTime}}
+              {{on "input" this.updateDrawTime}}
+              type="datetime-local"
+              class="lottery-input"
+            />
+            <div class="help-text">请选择未来的时间点，系统将在此时间自动开奖</div>
+          </div>
+        </div>
+
+        {{! 获奖人数 }}
+        <div class="control-group">
+          <label class="control-label">获奖人数</label>
+          <div class="controls">
+            <input 
+              value={{this.winnersCount}}
+              {{on "input" this.updateWinnersCount}}
+              type="number"
+              min="1"
+              max="100"
+              class="lottery-input"
+            />
+            <div class="help-text">随机抽奖的获奖人数。如果填写了"指定楼层"，此项将被忽略</div>
+          </div>
+        </div>
+
+        {{! 指定楼层 }}
+        <div class="control-group">
+          <label class="control-label">指定中奖楼层（可选）</label>
+          <div class="controls">
+            <input 
+              value={{this.specifiedPosts}}
+              {{on "input" this.updateSpecifiedPosts}}
+              class="lottery-input"
+              placeholder="例如：8,18,28"
+              type="text"
+            />
+            <div class="help-text">填写此项将覆盖随机抽奖。用英文逗号分隔楼层号</div>
+          </div>
+        </div>
+
+        {{! 参与门槛 }}
+        <div class="control-group">
+          <label class="control-label">参与门槛 <span class="required">*</span></label>
+          <div class="controls">
+            <input 
+              value={{this.minParticipants}}
+              {{on "input" this.updateMinParticipants}}
+              type="number"
+              min={{this.globalMinParticipants}}
+              max="1000"
+              class="lottery-input"
+            />
+            <div class="help-text">
+              最少需要多少人参与才能开奖（不能低于全局设置：{{this.globalMinParticipants}} 人）
+            </div>
+          </div>
+        </div>
+
+        {{! 后备策略 }}
+        <div class="control-group">
+          <label class="control-label">后备策略 <span class="required">*</span></label>
+          <div class="controls">
+            <select 
+              value={{this.backupStrategy}}
+              {{on "change" this.updateBackupStrategy}}
+              class="lottery-select"
+            >
+              <option value="continue">人数不足时继续开奖</option>
+              <option value="cancel">人数不足时取消活动</option>
+            </select>
+            <div class="help-text">当实际参与人数少于门槛时的处理方式</div>
+          </div>
+        </div>
+
+        {{! 补充说明 }}
+        <div class="control-group">
+          <label class="control-label">补充说明（可选）</label>
+          <div class="controls">
+            <textarea 
+              value={{this.additionalNotes}}
+              {{on "input" this.updateAdditionalNotes}}
+              class="lottery-textarea"
+              placeholder="其他需要说明的内容"
+              maxlength="300"
+              rows="2"
+            ></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  </:body>
+
+  <:footer>
+    <button
+      {{on "click" this.submit}}
+      disabled={{not this.isValid}}
+      class="btn btn-primary {{if this.isLoading 'loading'}}"
+    >
+      {{#if this.isLoading}}
+        正在处理...
+      {{else}}
+        插入抽奖
+      {{/if}}
+    </button>
+    <button
+      {{on "click" this.cancel}}
+      class="btn btn-flat"
+      disabled={{this.isLoading}}
+    >
+      取消
+    </button>
+  </:footer>
+</DModal>
