@@ -1,0 +1,27 @@
+zh_CN:
+  js:
+    composer:
+      lottery:
+        insert: "插入抽奖"
+    
+    lottery:
+      toolbar:
+        insert_lottery: "插入抽奖"
+        title: "创建抽奖活动"
+        
+      form:
+        activity_name: "活动名称"
+        prize_details: "奖品说明"
+        draw_time: "开奖时间"
+        winners_count: "获奖人数"
+        specified_posts: "指定中奖楼层"
+        min_participants: "参与门槛"
+        backup_strategy: "后备策略"
+        additional_notes: "补充说明"
+        
+      errors:
+        missing_activity_name: "活动名称不能为空"
+        missing_prize_details: "奖品说明不能为空"
+        missing_draw_time: "开奖时间不能为空"
+        invalid_time_format: "时间格式无效"
+        min_participants_too_low: "参与门槛不能低于全局最小值"
