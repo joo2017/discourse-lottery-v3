@@ -31,7 +31,7 @@ after_initialize do
       id: lottery.id,
       prize_name: lottery.prize_name,
       prize_details: lottery.prize_details,
-      draw_time: lottery.draw_time&.iso8601,  # 修正：iso8801 -> iso8601
+      draw_time: lottery.draw_time&.iso8601,
       winners_count: lottery.winners_count,
       min_participants: lottery.min_participants,
       backup_strategy: lottery.backup_strategy,
@@ -55,7 +55,7 @@ after_initialize do
       id: lottery.id,
       prize_name: lottery.prize_name,
       prize_details: lottery.prize_details,
-      draw_time: lottery.draw_time&.iso8601,  # 修正：iso8801 -> iso8601
+      draw_time: lottery.draw_time&.iso8601,
       winners_count: lottery.winners_count,
       min_participants: lottery.min_participants,
       backup_strategy: lottery.backup_strategy,
@@ -225,33 +225,25 @@ after_initialize do
           lottery = Lottery.find(lottery_id)
           post = lottery.post
           
-          # 修正：使用系统用户的 Guardian
-          guardian = Guardian.new(Discourse.system_user)
+          Rails.logger.info "LockLotteryPost Job: Attempting to lock post #{post.id} for lottery #{lottery_id}"
           
-          # 检查权限
-          if guardian.can_lock_post?(post)
-            # 使用 PostActionCreator 来锁定帖子
-            PostActionCreator.new(
-              Discourse.system_user,
-              post,
-              PostActionType.types[:staff_took_action]
-            ).perform
-            
-            # 设置帖子为锁定状态
-            post.update!(locked_by_id: Discourse.system_user.id)
-            
-            PostCreator.create!(
-              Discourse.system_user,
-              topic_id: lottery.topic_id,
-              raw: "🔒 抽奖信息已锁定，不允许再次编辑。如需修改，请联系管理员。"
-            )
-            
-            Rails.logger.info "LockLotteryPost Job: Locked post for lottery #{lottery_id}"
-          else
-            Rails.logger.warn "LockLotteryPost Job: No permission to lock post for lottery #{lottery_id}"
-          end
+          # Discourse 中锁定帖子的正确方式
+          post.update!(locked_by_id: Discourse.system_user.id)
+          
+          # 发布锁定通知
+          PostCreator.create!(
+            Discourse.system_user,
+            topic_id: lottery.topic_id,
+            raw: "🔒 抽奖信息已锁定，不允许再次编辑。如需修改，请联系管理员。"
+          )
+          
+          Rails.logger.info "LockLotteryPost Job: Successfully locked post for lottery #{lottery_id}"
+          
+        rescue ActiveRecord::RecordNotFound => e
+          Rails.logger.error "LockLotteryPost Job: Record not found: #{e.message}"
         rescue => e
-          Rails.logger.error "LockLotteryPost Job: Failed: #{e.message}"
+          Rails.logger.error "LockLotteryPost Job: Failed to lock post: #{e.message}"
+          Rails.logger.error "LockLotteryPost Job: #{e.backtrace.join("\n")}"
         end
       end
     end
