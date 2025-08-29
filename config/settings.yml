@@ -1,0 +1,26 @@
+# file: discourse-lottery-v3/config/settings.yml
+
+plugins:
+  lottery_enabled:
+    default: true
+    client: true
+
+  lottery_allowed_categories:
+    default: ""
+    type: category_list
+    client: true
+
+  lottery_min_participants_global:
+    default: 5
+    min: 1
+    client: true 
+
+  lottery_post_lock_delay_minutes:
+    default: 30
+    min: 0
+    client: false
+
+  lottery_excluded_groups:
+    default: ""
+    type: "group_list"
+    client: false
