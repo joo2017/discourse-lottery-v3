@@ -5,23 +5,23 @@ export default {
   name: "lottery-toolbar",
   initialize() {
     withPluginApi("1.4.0", (api) => {
-      console.log("🎲 抽奖工具栏初始化开始...");
+      console.log("抽奖工具栏初始化开始...");
 
       // 检查分类是否允许抽奖
       function canInsertLottery() {
         const composer = api.container.lookup("controller:composer");
         if (!composer) {
-          console.log("🎲 未找到编辑器控制器");
+          console.log("未找到编辑器控制器");
           return false;
         }
 
         const siteSettings = api.container.lookup("service:site-settings");
         const allowedCategories = siteSettings?.lottery_allowed_categories;
         
-        console.log("🎲 允许的分类设置:", allowedCategories);
+        console.log("允许的分类设置:", allowedCategories);
         
         if (!allowedCategories) {
-          console.log("🎲 未配置允许的分类，默认允许所有分类");
+          console.log("未配置允许的分类，默认允许所有分类");
           return true;
         }
 
@@ -32,16 +32,16 @@ export default {
 
         const currentCategoryId = Number(composer.get("model.categoryId") || 0);
         
-        console.log("🎲 允许的分类ID数组:", allowedIds);
-        console.log("🎲 当前分类ID:", currentCategoryId);
-        console.log("🎲 是否允许插入抽奖:", allowedIds.includes(currentCategoryId));
+        console.log("允许的分类ID数组:", allowedIds);
+        console.log("当前分类ID:", currentCategoryId);
+        console.log("是否允许插入抽奖:", allowedIds.includes(currentCategoryId));
         
         return allowedIds.includes(currentCategoryId);
       }
 
       // 添加工具栏按钮
       api.onToolbarCreate((toolbar) => {
-        console.log("🎲 正在向工具栏添加抽奖按钮");
+        console.log("正在向工具栏添加抽奖按钮");
 
         toolbar.addButton({
           title: "插入抽奖",
@@ -50,7 +50,7 @@ export default {
           icon: "dice",
           shortcut: "Ctrl+Shift+L",
           perform: (e) => {
-            console.log("🎲 抽奖按钮被点击");
+            console.log("抽奖按钮被点击");
 
             // 检查功能是否启用
             const siteSettings = api.container.lookup("service:site-settings");
@@ -78,7 +78,7 @@ export default {
           }
         });
 
-        console.log("🎲 抽奖按钮已成功添加到工具栏");
+        console.log("抽奖按钮已成功添加到工具栏");
       });
 
       // 监听编辑器内容变化，处理抽奖数据提取
@@ -86,18 +86,18 @@ export default {
         pluginId: "discourse-lottery-v3",
         
         save(options) {
-          console.log("🎲 编辑器保存被调用");
+          console.log("编辑器保存被调用");
           
           const model = this.get("model");
           const content = model.get("reply");
           
           // 检查是否包含抽奖标记
           if (content && content.includes("[lottery]")) {
-            console.log("🎲 检测到抽奖内容，开始解析");
+            console.log("检测到抽奖内容，开始解析");
             
             const lotteryData = this.extractLotteryData(content);
             if (lotteryData) {
-              console.log("🎲 成功解析抽奖数据:", lotteryData);
+              console.log("成功解析抽奖数据:", lotteryData);
               
               // 保存到 custom_fields
               if (!model.custom_fields) {
@@ -107,7 +107,7 @@ export default {
               model.set("custom_fields.lottery", JSON.stringify(lotteryData));
               model.notifyPropertyChange("custom_fields");
               
-              console.log("🎲 抽奖数据已保存到 custom_fields");
+              console.log("抽奖数据已保存到 custom_fields");
             }
           }
           
@@ -165,7 +165,7 @@ export default {
         }
       });
 
-      console.log("🎲 抽奖工具栏插件初始化完成");
+      console.log("抽奖工具栏插件初始化完成");
     });
   },
 };
