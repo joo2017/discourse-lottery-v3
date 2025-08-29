@@ -1,6 +1,6 @@
 # name: discourse-lottery-v3
 # about: A comprehensive and robust lottery plugin for Discourse, based on the V3 blueprint.
-# version: 0.1
+# version: 0.1.0
 # authors: [Your Name]
 # url: [Your GitHub Repo URL]
 
@@ -9,10 +9,60 @@ enabled_site_setting :lottery_enabled
 # 注册资源文件
 register_asset "stylesheets/lottery-modal.scss"
 register_asset "stylesheets/lottery-form.scss"
-register_asset "stylesheets/lottery-display.scss"  # 新增
+register_asset "stylesheets/lottery-display.scss"
 
 # 注册图标
 register_svg_icon "dice"
+
+# 扩展Topic序列化器以包含抽奖数据
+add_to_serializer :topic_view, :lottery_data do
+  lottery = object.topic.lotteries.first
+  return nil unless lottery
+
+  {
+    id: lottery.id,
+    prize_name: lottery.prize_name,
+    prize_details: lottery.prize_details,
+    draw_time: lottery.draw_time.iso8601,
+    winners_count: lottery.winners_count,
+    min_participants: lottery.min_participants,
+    backup_strategy: lottery.backup_strategy,
+    lottery_type: lottery.lottery_type,
+    specified_posts: lottery.specified_post_numbers,
+    status: lottery.status,
+    additional_notes: lottery.additional_notes,
+    prize_image: lottery.prize_image
+  }
+end
+
+add_to_serializer :topic_view, :include_lottery_data? do
+  object.topic.lotteries.exists?
+end
+
+# 扩展Post序列化器
+add_to_serializer :post, :lottery_data do
+  return nil unless post.post_number == 1 && post.topic.lotteries.exists?
+  
+  lottery = post.topic.lotteries.first
+  {
+    id: lottery.id,
+    prize_name: lottery.prize_name,
+    prize_details: lottery.prize_details,
+    draw_time: lottery.draw_time.iso8601,
+    winners_count: lottery.winners_count,
+    min_participants: lottery.min_participants,
+    backup_strategy: lottery.backup_strategy,
+    lottery_type: lottery.lottery_type,
+    specified_posts: lottery.specified_post_numbers,
+    status: lottery.status,
+    additional_notes: lottery.additional_notes,
+    prize_image: lottery.prize_image
+  }
+end
+
+add_to_serializer :post, :include_lottery_data? do
+  post.post_number == 1 && post.topic.lotteries.exists?
+end
 
 after_initialize do
   Rails.logger.info "LotteryPlugin: Starting initialization"
@@ -20,16 +70,12 @@ after_initialize do
   # 加载模型和服务
   begin
     require_relative 'lib/lottery'
-    Rails.logger.info "LotteryPlugin: Loaded lottery model"
-  rescue => e
-    Rails.logger.error "LotteryPlugin: Failed to load lottery model: #{e.message}"
-  end
-  
-  begin
     require_relative 'lib/lottery_creator'
-    Rails.logger.info "LotteryPlugin: Loaded lottery creator"
+    require_relative 'lib/lottery_manager'
+    Rails.logger.info "LotteryPlugin: Loaded models and services"
   rescue => e
-    Rails.logger.error "LotteryPlugin: Failed to load lottery creator: #{e.message}"
+    Rails.logger.error "LotteryPlugin: Failed to load models: #{e.message}"
+    Rails.logger.error "LotteryPlugin: #{e.backtrace.join("\n")}"
   end
   
   # 定义模型关联
@@ -38,72 +84,90 @@ after_initialize do
       has_many :lotteries, dependent: :destroy
     end
     Rails.logger.info "LotteryPlugin: Added lotteries association to Topic"
-  else
-    Rails.logger.error "LotteryPlugin: Topic class not found"
+  end
+
+  if defined?(Post)
+    Post.class_eval do
+      has_many :lotteries, dependent: :destroy
+    end
+    Rails.logger.info "LotteryPlugin: Added lotteries association to Post"
+  end
+
+  if defined?(User)
+    User.class_eval do
+      has_many :lotteries, dependent: :destroy
+    end
+    Rails.logger.info "LotteryPlugin: Added lotteries association to User"
   end
   
-  # 监听话题创建事件
-  DiscourseEvent.on(:post_created) do |post, opts, user|
+  # 监听话题创建事件（修正版本）
+  DiscourseEvent.on(:topic_created) do |topic, params, user|
     next unless SiteSetting.lottery_enabled
-    next unless post.post_number == 1  # 只处理主楼层
     
-    topic = post.topic
-    Rails.logger.info "LotteryPlugin: Post created for topic #{topic.id}, checking for lottery data"
+    Rails.logger.info "LotteryPlugin: Topic created #{topic.id}, checking for lottery data"
     
-    # 检查是否有抽奖数据在 custom_fields 中
-    lottery_data = topic.custom_fields['lottery']
-    if lottery_data.present?
-      Rails.logger.info "LotteryPlugin: Found lottery data in custom_fields: #{lottery_data}"
+    # 检查话题的 custom_fields 中是否有抽奖数据
+    lottery_data_json = topic.custom_fields['lottery']
+    
+    if lottery_data_json.present?
+      Rails.logger.info "LotteryPlugin: Found lottery data: #{lottery_data_json}"
+      
       begin
-        parsed_data = JSON.parse(lottery_data)
-        Rails.logger.info "LotteryPlugin: Parsed data: #{parsed_data.inspect}"
+        lottery_data = JSON.parse(lottery_data_json)
+        Rails.logger.info "LotteryPlugin: Parsed lottery data: #{lottery_data.inspect}"
         
-        # 延迟执行，确保话题创建完成
-        Jobs.enqueue_in(5.seconds, :create_lottery, {
+        # 延迟处理，确保话题完全创建完成
+        Jobs.enqueue_in(2.seconds, :create_lottery, {
           topic_id: topic.id,
-          lottery_data: parsed_data,
+          lottery_data: lottery_data,
           user_id: user.id
         })
         
-        Rails.logger.info "LotteryPlugin: Enqueued lottery creation job"
+        Rails.logger.info "LotteryPlugin: Enqueued lottery creation job for topic #{topic.id}"
+      rescue JSON::ParserError => e
+        Rails.logger.error "LotteryPlugin: Failed to parse lottery JSON: #{e.message}"
+        
+        # 在话题中发布错误信息
+        Jobs.enqueue_in(5.seconds, :post_lottery_error, {
+          topic_id: topic.id,
+          error_message: "抽奖数据格式错误，请重新创建抽奖"
+        })
       rescue => e
-        Rails.logger.error "LotteryPlugin: Failed to parse lottery data: #{e.message}"
-        Rails.logger.error "LotteryPlugin: Backtrace: #{e.backtrace.join("\n")}"
+        Rails.logger.error "LotteryPlugin: Unexpected error processing lottery: #{e.message}"
+        Rails.logger.error "LotteryPlugin: #{e.backtrace.join("\n")}"
       end
     else
-      Rails.logger.info "LotteryPlugin: No lottery data found in custom_fields for topic #{topic.id}"
+      Rails.logger.debug "LotteryPlugin: No lottery data found for topic #{topic.id}"
     end
   end
 
-  # 监听帖子渲染，替换抽奖占位符为美化组件
-  DiscourseEvent.on(:post_process_cooked) do |doc, post|
+  # 监听帖子编辑事件（处理抽奖主题的后悔期编辑）
+  DiscourseEvent.on(:post_edited) do |post, topic_changed, user|
     next unless SiteSetting.lottery_enabled
+    next unless post.post_number == 1  # 只处理主楼层编辑
+    next unless post.topic.lotteries.exists?  # 只处理抽奖主题
     
-    lottery_blocks = doc.css('p').select { |p| p.text.include?('[lottery]') }
+    lottery = post.topic.lotteries.first
+    next unless lottery.running?  # 只处理进行中的抽奖
     
-    lottery_blocks.each do |block|
-      content = block.text
-      if content.match(/\[lottery\](.*?)\[\/lottery\]/m)
-        # 解析抽奖数据
-        lottery_info = $1
-        lottery_data = parse_lottery_content(lottery_info)
-        
-        # 如果有对应的数据库记录，获取状态信息
-        if post.topic&.lotteries&.first
-          lottery_record = post.topic.lotteries.first
-          lottery_data[:status] = lottery_record.status
-        end
-        
-        # 替换为美化的HTML
-        beautiful_html = generate_lottery_display_html(lottery_data)
-        block.replace(beautiful_html)
-        
-        Rails.logger.info "LotteryPlugin: Replaced lottery placeholder with beautiful display"
-      end
+    Rails.logger.info "LotteryPlugin: Lottery post edited, checking for updates"
+    
+    # 检查是否在后悔期内
+    lock_delay = SiteSetting.lottery_post_lock_delay_minutes.minutes
+    if lottery.created_at + lock_delay > Time.current
+      Rails.logger.info "LotteryPlugin: Post edit within regret period, updating lottery"
+      
+      # 重新解析抽奖内容并更新
+      Jobs.enqueue(:update_lottery_from_edit, {
+        lottery_id: lottery.id,
+        post_id: post.id
+      })
+    else
+      Rails.logger.info "LotteryPlugin: Post edit after regret period, ignoring"
     end
   end
   
-  Rails.logger.info "LotteryPlugin: Initialization completed"
+  Rails.logger.info "LotteryPlugin: Event handlers registered"
   
   # 定义后台任务
   module ::Jobs
@@ -114,147 +178,190 @@ after_initialize do
         user_id = args[:user_id]
         
         Rails.logger.info "CreateLottery Job: Starting for topic #{topic_id}"
+        Rails.logger.info "CreateLottery Job: Data: #{lottery_data.inspect}"
         
         begin
           topic = Topic.find(topic_id)
           user = User.find(user_id)
           
-          LotteryCreator.new(topic, lottery_data, user).create
-          Rails.logger.info "CreateLottery Job: Successfully created lottery for topic #{topic_id}"
+          # 创建抽奖
+          lottery = LotteryCreator.new(topic, lottery_data, user).create
+          
+          # 调度开奖任务
+          Jobs.enqueue_at(lottery.draw_time, :execute_lottery_draw, lottery_id: lottery.id)
+          Rails.logger.info "CreateLottery Job: Scheduled draw job for #{lottery.draw_time}"
+          
+          # 调度锁定任务（如果设置了延迟）
+          lock_delay = SiteSetting.lottery_post_lock_delay_minutes
+          if lock_delay > 0
+            lock_time = lottery.created_at + lock_delay.minutes
+            Jobs.enqueue_at(lock_time, :lock_lottery_post, lottery_id: lottery.id)
+            Rails.logger.info "CreateLottery Job: Scheduled lock job for #{lock_time}"
+          end
+          
+          Rails.logger.info "CreateLottery Job: Successfully created lottery #{lottery.id}"
         rescue => e
-          Rails.logger.error "CreateLottery Job: Failed to create lottery: #{e.message}"
-          Rails.logger.error "CreateLottery Job: Backtrace: #{e.backtrace.join("\n")}"
+          Rails.logger.error "CreateLottery Job: Failed: #{e.message}"
+          Rails.logger.error "CreateLottery Job: #{e.backtrace.join("\n")}"
           
           # 发布错误消息
+          Jobs.enqueue(:post_lottery_error, {
+            topic_id: topic_id,
+            error_message: e.message
+          })
+        end
+      end
+    end
+
+    class PostLotteryError < ::Jobs::Base
+      def execute(args)
+        topic_id = args[:topic_id]
+        error_message = args[:error_message]
+        
+        begin
           PostCreator.create!(
             Discourse.system_user,
             topic_id: topic_id,
-            raw: "抽奖创建失败：#{e.message}。请联系管理员。"
+            raw: "🚫 **抽奖创建失败**\n\n#{error_message}\n\n请检查抽奖信息并重新创建，或联系管理员获取帮助。"
           )
+          Rails.logger.info "PostLotteryError Job: Posted error message to topic #{topic_id}"
+        rescue => e
+          Rails.logger.error "PostLotteryError Job: Failed to post error: #{e.message}"
         end
       end
     end
-  end
 
-  # 解析抽奖内容的辅助方法
-  def self.parse_lottery_content(content)
-    data = {}
-    content.split("\n").each do |line|
-      line = line.strip
-      next if line.empty?
-      
-      if line.include?('：')
-        key, value = line.split('：', 2)
-        case key.strip
-        when '活动名称'
-          data[:prize_name] = value.strip
-        when '奖品说明'
-          data[:prize_details] = value.strip
-        when '开奖时间'
-          data[:draw_time] = value.strip
-        when '抽奖方式'
-          data[:lottery_type] = value.strip
-        when '获奖人数'
-          data[:winners_count] = value.strip.to_i
-        when '指定楼层'
-          data[:specified_posts] = value.strip
-        when '参与门槛'
-          data[:min_participants] = value.gsub(/[^\d]/, '').to_i
-        when '补充说明'
-          data[:additional_notes] = value.strip
-        when '奖品图片'
-          data[:prize_image] = value.strip
+    class LockLotteryPost < ::Jobs::Base
+      def execute(args)
+        lottery_id = args[:lottery_id]
+        
+        begin
+          lottery = Lottery.find(lottery_id)
+          post = lottery.post
+          
+          # 锁定帖子编辑
+          post.update!(locked: true)
+          
+          # 可选：发布锁定通知
+          PostCreator.create!(
+            Discourse.system_user,
+            topic_id: lottery.topic_id,
+            raw: "🔒 抽奖信息已锁定，不允许再次编辑。如需修改，请联系管理员。"
+          )
+          
+          Rails.logger.info "LockLotteryPost Job: Locked post for lottery #{lottery_id}"
+        rescue => e
+          Rails.logger.error "LockLotteryPost Job: Failed: #{e.message}"
         end
       end
     end
-    data
+
+    class ExecuteLotteryDraw < ::Jobs::Base
+      def execute(args)
+        lottery_id = args[:lottery_id]
+        
+        begin
+          lottery = Lottery.find(lottery_id)
+          Rails.logger.info "ExecuteLotteryDraw Job: Starting draw for lottery #{lottery_id}"
+          
+          # 使用 LotteryManager 执行开奖
+          manager = LotteryManager.new(lottery)
+          result = manager.execute_draw
+          
+          Rails.logger.info "ExecuteLotteryDraw Job: Draw completed with result: #{result}"
+        rescue => e
+          Rails.logger.error "ExecuteLotteryDraw Job: Failed: #{e.message}"
+          Rails.logger.error "ExecuteLotteryDraw Job: #{e.backtrace.join("\n")}"
+          
+          # 标记抽奖为失败状态并通知
+          begin
+            lottery = Lottery.find(lottery_id)
+            lottery.update!(status: 'cancelled')
+            
+            PostCreator.create!(
+              Discourse.system_user,
+              topic_id: lottery.topic_id,
+              raw: "❌ **开奖失败**\n\n系统在执行开奖时遇到错误：#{e.message}\n\n请联系管理员处理。"
+            )
+          rescue => inner_e
+            Rails.logger.error "ExecuteLotteryDraw Job: Failed to handle error: #{inner_e.message}"
+          end
+        end
+      end
+    end
+
+    class UpdateLotteryFromEdit < ::Jobs::Base
+      def execute(args)
+        lottery_id = args[:lottery_id]
+        post_id = args[:post_id]
+        
+        begin
+          lottery = Lottery.find(lottery_id)
+          post = Post.find(post_id)
+          
+          Rails.logger.info "UpdateLotteryFromEdit Job: Updating lottery #{lottery_id} from post edit"
+          
+          # 解析帖子内容中的抽奖信息
+          lottery_data = extract_lottery_data_from_content(post.raw)
+          
+          if lottery_data.present?
+            # 验证并更新抽奖信息
+            LotteryCreator.new(lottery.topic, lottery_data, lottery.user).update_existing(lottery)
+            
+            Rails.logger.info "UpdateLotteryFromEdit Job: Updated lottery successfully"
+          else
+            Rails.logger.warn "UpdateLotteryFromEdit Job: No valid lottery data found in edited content"
+          end
+        rescue => e
+          Rails.logger.error "UpdateLotteryFromEdit Job: Failed: #{e.message}"
+        end
+      end
+
+      private
+
+      def extract_lottery_data_from_content(content)
+        # 提取 [lottery]...[/lottery] 标签中的内容
+        match = content.match(/\[lottery\](.*?)\[\/lottery\]/m)
+        return nil unless match
+
+        lottery_content = match[1]
+        data = {}
+
+        lottery_content.split("\n").each do |line|
+          line = line.strip
+          next if line.empty?
+          
+          if line.include?('：')
+            key, value = line.split('：', 2)
+            case key.strip
+            when '活动名称'
+              data['prize_name'] = value.strip
+            when '奖品说明'
+              data['prize_details'] = value.strip
+            when '开奖时间'
+              data['draw_time'] = value.strip
+            when '获奖人数'
+              data['winners_count'] = value.strip.to_i
+            when '指定楼层'
+              data['specified_posts'] = value.strip
+            when '参与门槛'
+              data['min_participants'] = value.gsub(/[^\d]/, '').to_i
+            when '补充说明'
+              data['additional_notes'] = value.strip
+            when '奖品图片'
+              data['prize_image'] = value.strip
+            end
+          end
+        end
+
+        # 确定后备策略（从原始抽奖记录继承，因为编辑时通常不会改变）
+        data['backup_strategy'] ||= 'continue'
+        
+        data
+      end
+    end
   end
-
-  # 生成美化显示HTML的方法
-  def self.generate_lottery_display_html(data)
-    status_class = "lottery-status-#{data[:status] || 'running'}"
-    status_text = case data[:status]
-                  when 'finished' then '🎉 已开奖'
-                  when 'cancelled' then '❌ 已取消'
-                  else '🏃 进行中'
-                  end
-
-    # 格式化开奖时间
-    formatted_time = begin
-      Time.parse(data[:draw_time]).strftime('%Y年%m月%d日 %H:%M')
-    rescue
-      data[:draw_time]
-    end
-
-    # 判断抽奖方式
-    lottery_method = if data[:specified_posts] && !data[:specified_posts].empty?
-                      "指定楼层 (#{data[:specified_posts]})"
-                    else
-                      "随机抽取 #{data[:winners_count]} 人"
-                    end
-
-    html = <<~HTML
-      <div class="lottery-display-card #{status_class}">
-        <div class="lottery-header">
-          <div class="lottery-title">
-            <span class="lottery-icon">🎲</span>
-            <h3>#{data[:prize_name]}</h3>
-          </div>
-          <div class="lottery-status">#{status_text}</div>
-        </div>
-        <div class="lottery-content">
-    HTML
-
-    # 添加图片（如果有）
-    if data[:prize_image] && !data[:prize_image].empty?
-      html += <<~HTML
-        <div class="lottery-image">
-          <img src="#{data[:prize_image]}" alt="奖品图片" />
-        </div>
-      HTML
-    end
-
-    html += <<~HTML
-          <div class="lottery-details">
-            <div class="lottery-detail-item">
-              <span class="label">🎁 奖品说明：</span>
-              <span class="value">#{data[:prize_details]}</span>
-            </div>
-            <div class="lottery-detail-item">
-              <span class="label">⏰ 开奖时间：</span>
-              <span class="value">#{formatted_time}</span>
-            </div>
-            <div class="lottery-detail-item">
-              <span class="label">🎯 抽奖方式：</span>
-              <span class="value">#{lottery_method}</span>
-            </div>
-            <div class="lottery-detail-item">
-              <span class="label">👥 参与门槛：</span>
-              <span class="value">至少 #{data[:min_participants]} 人参与</span>
-            </div>
-    HTML
-
-    # 添加补充说明（如果有）
-    if data[:additional_notes] && !data[:additional_notes].empty?
-      html += <<~HTML
-            <div class="lottery-detail-item">
-              <span class="label">📝 补充说明：</span>
-              <span class="value">#{data[:additional_notes]}</span>
-            </div>
-      HTML
-    end
-
-    html += <<~HTML
-          </div>
-        </div>
-        <div class="lottery-footer">
-          <div class="participation-tip">
-            💡 <strong>参与方式：</strong>在本话题下回复即可参与抽奖
-          </div>
-        </div>
-      </div>
-    HTML
-
-    html
-  end
+  
+  Rails.logger.info "LotteryPlugin: Job classes defined"
+  Rails.logger.info "LotteryPlugin: Initialization completed successfully"
 end
