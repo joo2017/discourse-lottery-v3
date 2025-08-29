@@ -368,4 +368,4 @@ export default class LotteryFormModal extends Component {
       placeholder += `指定楼层：${lotteryData.specified_posts}\n`;
     } else {
       placeholder += `抽奖方式：随机抽取\n`;
-      placeholder += `
+      placeholder += ``
