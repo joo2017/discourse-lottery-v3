@@ -2,10 +2,12 @@ import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
 import { inject as service } from "@ember/service";
+import { isBlank, isPresent } from "@ember/utils";
 
 export default class LotteryFormModal extends Component {
   @service modal;
   @service site;
+  @service appEvents;
 
   // 表单数据（使用 @tracked 进行响应式更新）
   @tracked prizeName = "";
@@ -16,27 +18,35 @@ export default class LotteryFormModal extends Component {
   @tracked minParticipants = 5;
   @tracked backupStrategy = "continue";
   @tracked additionalNotes = "";
-  @tracked prizeImage = "";  // 图片URL
-  @tracked prizeImagePreview = "";  // 图片预览URL
-  @tracked isImageUploading = false;  // 图片上传状态
+  @tracked prizeImage = "";  
+  @tracked prizeImagePreview = "";  
+  @tracked isImageUploading = false;  
   
   // 状态管理
   @tracked isLoading = false;
   @tracked flash = "";
   @tracked flashType = "";
+  @tracked validationErrors = {};
 
   constructor(owner, args) {
     super(owner, args);
     console.log("🎲 抽奖表单模态框组件初始化");
     console.log("🎲 传入的模型数据:", this.args.model);
     
+    this.initializeDefaults();
+  }
+
+  initializeDefaults() {
     // 初始化最小参与人数
-    this.minParticipants = this.args.model?.siteSettings?.lottery_min_participants_global || 5;
+    const globalMin = this.args.model?.siteSettings?.lottery_min_participants_global || 5;
+    this.minParticipants = globalMin;
     
     // 设置默认开奖时间（1小时后）
     const defaultTime = new Date();
     defaultTime.setHours(defaultTime.getHours() + 1);
-    this.drawTime = defaultTime.toISOString().slice(0, 16);
+    // 转换为本地时间字符串，移除秒和毫秒
+    this.drawTime = new Date(defaultTime.getTime() - defaultTime.getTimezoneOffset() * 60000)
+                    .toISOString().slice(0, 16);
 
     console.log("🎲 初始化完成，默认开奖时间:", this.drawTime);
     console.log("🎲 最小参与人数:", this.minParticipants);
@@ -44,19 +54,77 @@ export default class LotteryFormModal extends Component {
 
   // 表单验证
   get isValid() {
-    const hasRequiredFields = this.prizeName.trim() && 
-                             this.prizeDetails.trim() && 
-                             this.drawTime.trim();
-    const hasValidMinParticipants = this.minParticipants >= this.globalMinParticipants;
+    this.validationErrors = {};
+    let isValid = true;
+
+    // 检查必填字段
+    if (isBlank(this.prizeName)) {
+      this.validationErrors.prizeName = "活动名称不能为空";
+      isValid = false;
+    } else if (this.prizeName.length > 100) {
+      this.validationErrors.prizeName = "活动名称不能超过100个字符";
+      isValid = false;
+    }
+
+    if (isBlank(this.prizeDetails)) {
+      this.validationErrors.prizeDetails = "奖品说明不能为空";
+      isValid = false;
+    } else if (this.prizeDetails.length > 500) {
+      this.validationErrors.prizeDetails = "奖品说明不能超过500个字符";
+      isValid = false;
+    }
+
+    if (isBlank(this.drawTime)) {
+      this.validationErrors.drawTime = "开奖时间不能为空";
+      isValid = false;
+    } else {
+      const drawDate = new Date(this.drawTime);
+      if (isNaN(drawDate.getTime())) {
+        this.validationErrors.drawTime = "开奖时间格式无效";
+        isValid = false;
+      } else if (drawDate <= new Date()) {
+        this.validationErrors.drawTime = "开奖时间必须是未来时间";
+        isValid = false;
+      }
+    }
+
+    // 验证参与门槛
+    if (this.minParticipants < this.globalMinParticipants) {
+      this.validationErrors.minParticipants = `参与门槛不能低于全局设置的 ${this.globalMinParticipants} 人`;
+      isValid = false;
+    }
+
+    // 验证获奖人数
+    if (this.winnersCount < 1) {
+      this.validationErrors.winnersCount = "获奖人数必须至少为1";
+      isValid = false;
+    } else if (this.winnersCount > 100) {
+      this.validationErrors.winnersCount = "获奖人数不能超过100";
+      isValid = false;
+    }
+
+    // 验证指定楼层格式（如果填写了）
+    if (isPresent(this.specifiedPosts)) {
+      const posts = this.specifiedPosts.split(',').map(p => p.trim()).filter(p => p);
+      const numbers = posts.map(p => parseInt(p)).filter(n => !isNaN(n) && n > 1);
+      
+      if (posts.length !== numbers.length || numbers.length === 0) {
+        this.validationErrors.specifiedPosts = "指定楼层格式错误，请使用逗号分隔的数字";
+        isValid = false;
+      } else if (numbers.length !== [...new Set(numbers)].length) {
+        this.validationErrors.specifiedPosts = "指定楼层不能包含重复数字";
+        isValid = false;
+      }
+    }
+
+    // 验证补充说明长度
+    if (isPresent(this.additionalNotes) && this.additionalNotes.length > 300) {
+      this.validationErrors.additionalNotes = "补充说明不能超过300个字符";
+      isValid = false;
+    }
     
-    const valid = hasRequiredFields && hasValidMinParticipants;
-    console.log("🎲 表单验证结果:", {
-      hasRequiredFields,
-      hasValidMinParticipants,
-      valid
-    });
-    
-    return valid;
+    console.log("🎲 表单验证结果:", { isValid, errors: this.validationErrors });
+    return isValid;
   }
 
   // 获取全局最小参与人数
@@ -70,12 +138,18 @@ export default class LotteryFormModal extends Component {
     console.log("🎲 显示 flash 消息:", message, type);
     this.flash = message;
     this.flashType = type;
+    
+    // 自动清除成功消息
+    if (type === "success") {
+      setTimeout(() => {
+        this.clearFlash();
+      }, 3000);
+    }
   }
 
   // 清除 flash 消息
   @action
   clearFlash() {
-    console.log("🎲 清除 flash 消息");
     this.flash = "";
     this.flashType = "";
   }
@@ -85,59 +159,53 @@ export default class LotteryFormModal extends Component {
   updatePrizeName(event) {
     this.prizeName = event.target.value;
     this.clearFlash();
-    console.log("🎲 更新活动名称:", this.prizeName);
+    delete this.validationErrors.prizeName;
   }
 
   @action
   updatePrizeDetails(event) {
     this.prizeDetails = event.target.value;
     this.clearFlash();
-    console.log("🎲 更新奖品说明:", this.prizeDetails);
+    delete this.validationErrors.prizeDetails;
   }
 
   @action
   updateDrawTime(event) {
     this.drawTime = event.target.value;
     this.clearFlash();
-    console.log("🎲 更新开奖时间:", this.drawTime);
+    delete this.validationErrors.drawTime;
   }
 
   @action
   updateWinnersCount(event) {
-    this.winnersCount = parseInt(event.target.value) || 1;
-    console.log("🎲 更新获奖人数:", this.winnersCount);
+    const value = parseInt(event.target.value);
+    this.winnersCount = isNaN(value) ? 1 : Math.max(1, Math.min(100, value));
+    delete this.validationErrors.winnersCount;
   }
 
   @action
   updateSpecifiedPosts(event) {
     this.specifiedPosts = event.target.value;
-    console.log("🎲 更新指定楼层:", this.specifiedPosts);
+    delete this.validationErrors.specifiedPosts;
   }
 
   @action
   updateMinParticipants(event) {
-    const num = parseInt(event.target.value) || 0;
-    this.minParticipants = Math.max(num, this.globalMinParticipants);
+    const value = parseInt(event.target.value);
+    this.minParticipants = isNaN(value) ? this.globalMinParticipants : Math.max(value, this.globalMinParticipants);
     this.clearFlash();
-    console.log("🎲 更新参与门槛:", this.minParticipants);
+    delete this.validationErrors.minParticipants;
   }
 
   @action
   updateBackupStrategy(event) {
     this.backupStrategy = event.target.value;
-    console.log("🎲 更新后备策略:", this.backupStrategy);
   }
 
   @action
   updateAdditionalNotes(event) {
     this.additionalNotes = event.target.value;
-    console.log("🎲 更新补充说明:", this.additionalNotes);
-  }
-
-  @action
-  updatePrizeImage(event) {
-    this.prizeImage = event.target.value;
-    console.log("🎲 更新奖品图片:", this.prizeImage);
+    delete this.validationErrors.additionalNotes;
   }
 
   // 处理图片上传
@@ -174,11 +242,15 @@ export default class LotteryFormModal extends Component {
       formData.append('file', file);
       formData.append('type', 'composer');
 
+      // 获取 CSRF token
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      
       const response = await fetch('/uploads.json', {
         method: 'POST',
         body: formData,
         headers: {
-          'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+          'X-CSRF-Token': csrfToken || '',
+          'X-Requested-With': 'XMLHttpRequest'
         }
       });
 
@@ -188,7 +260,8 @@ export default class LotteryFormModal extends Component {
         console.log("🎲 图片上传成功:", this.prizeImage);
         this.showFlash("图片上传成功", "success");
       } else {
-        throw new Error('上传失败');
+        const errorData = await response.text();
+        throw new Error(`上传失败: ${response.status} - ${errorData}`);
       }
     } catch (error) {
       console.error("🎲 图片上传失败:", error);
@@ -204,6 +277,11 @@ export default class LotteryFormModal extends Component {
   removeImage() {
     this.prizeImage = "";
     this.prizeImagePreview = "";
+    // 清除文件输入框
+    const fileInput = document.getElementById('lottery-image-upload');
+    if (fileInput) {
+      fileInput.value = '';
+    }
     console.log("🎲 移除图片");
   }
 
@@ -214,29 +292,9 @@ export default class LotteryFormModal extends Component {
     this.clearFlash();
 
     if (!this.isValid) {
-      this.showFlash("请填写所有必填字段");
-      return;
-    }
-
-    // 验证时间格式和有效性
-    try {
-      const drawDate = new Date(this.drawTime);
-      if (isNaN(drawDate.getTime())) {
-        this.showFlash("开奖时间格式无效");
-        return;
-      }
-      if (drawDate <= new Date()) {
-        this.showFlash("开奖时间必须是未来时间");
-        return;
-      }
-    } catch (e) {
-      this.showFlash("开奖时间格式无效");
-      return;
-    }
-
-    // 验证参与门槛
-    if (this.minParticipants < this.globalMinParticipants) {
-      this.showFlash(`参与门槛不能低于全局设置的 ${this.globalMinParticipants} 人`);
+      const firstErrorKey = Object.keys(this.validationErrors)[0];
+      const firstError = this.validationErrors[firstErrorKey];
+      this.showFlash(firstError, "error");
       return;
     }
 
@@ -254,54 +312,23 @@ export default class LotteryFormModal extends Component {
         min_participants: this.minParticipants,
         backup_strategy: this.backupStrategy,
         additional_notes: this.additionalNotes.trim(),
-        prize_image: this.prizeImage.trim()  // 新增：图片字段
+        prize_image: this.prizeImage.trim()
       };
 
       console.log("🎲 构建的抽奖数据对象:", lotteryData);
 
-      // 缓存数据供后续使用
-      window.lotteryFormDataCache = lotteryData;
-      console.log("🎲 数据已缓存到 window.lotteryFormDataCache");
-
-      // 构建完整的占位符内容（修复后的版本）
-      let placeholder = `\n[lottery]\n`;
-      placeholder += `活动名称：${lotteryData.prize_name}\n`;
-      placeholder += `奖品说明：${lotteryData.prize_details}\n`;
-      placeholder += `开奖时间：${lotteryData.draw_time}\n`;
-      
-      // 智能判断抽奖方式
-      if (lotteryData.specified_posts && lotteryData.specified_posts.trim()) {
-        placeholder += `抽奖方式：指定楼层\n`;
-        placeholder += `指定楼层：${lotteryData.specified_posts}\n`;
-      } else {
-        placeholder += `抽奖方式：随机抽取\n`;
-        placeholder += `获奖人数：${lotteryData.winners_count}\n`;
-      }
-      
-      placeholder += `参与门槛：${lotteryData.min_participants}人\n`;
-      
-      // 补充说明（如果有）
-      if (lotteryData.additional_notes && lotteryData.additional_notes.trim()) {
-        placeholder += `补充说明：${lotteryData.additional_notes}\n`;
-      }
-      
-      // 奖品图片（如果有）
-      if (lotteryData.prize_image && lotteryData.prize_image.trim()) {
-        placeholder += `奖品图片：${lotteryData.prize_image}\n`;
-      }
-      
-      placeholder += `[/lottery]\n\n`;
+      // 构建完整的占位符内容
+      const placeholder = this.buildLotteryPlaceholder(lotteryData);
       
       // 获取编辑器并插入内容
       const composer = this.args.model?.composer;
       console.log("🎲 获取编辑器实例:", composer);
       
-      if (composer) {
+      if (composer && composer.get) {
         const currentText = composer.get("model.reply") || "";
         composer.set("model.reply", currentText + placeholder);
 
         console.log("🎲 抽奖内容成功插入到编辑器");
-        console.log("🎲 插入的完整占位符:", placeholder);
         
         // 显示成功消息
         this.showFlash("抽奖信息已插入编辑器", "success");
@@ -313,15 +340,47 @@ export default class LotteryFormModal extends Component {
         }, 1500);
       } else {
         console.error("🎲 无法获取编辑器实例");
-        this.showFlash("无法获取编辑器，请刷新页面重试");
+        this.showFlash("无法获取编辑器，请刷新页面重试", "error");
       }
     } catch (error) {
       console.error("🎲 提交表单时发生错误:", error);
-      this.showFlash("提交失败：" + error.message);
+      this.showFlash("提交失败：" + error.message, "error");
     } finally {
       this.isLoading = false;
       console.log("🎲 清除加载状态");
     }
+  }
+
+  buildLotteryPlaceholder(lotteryData) {
+    let placeholder = `\n[lottery]\n`;
+    placeholder += `活动名称：${lotteryData.prize_name}\n`;
+    placeholder += `奖品说明：${lotteryData.prize_details}\n`;
+    placeholder += `开奖时间：${lotteryData.draw_time}\n`;
+    
+    // 智能判断抽奖方式
+    if (lotteryData.specified_posts && lotteryData.specified_posts.trim()) {
+      placeholder += `抽奖方式：指定楼层\n`;
+      placeholder += `指定楼层：${lotteryData.specified_posts}\n`;
+    } else {
+      placeholder += `抽奖方式：随机抽取\n`;
+      placeholder += `获奖人数：${lotteryData.winners_count}\n`;
+    }
+    
+    placeholder += `参与门槛：${lotteryData.min_participants}人\n`;
+    
+    // 补充说明（如果有）
+    if (lotteryData.additional_notes && lotteryData.additional_notes.trim()) {
+      placeholder += `补充说明：${lotteryData.additional_notes}\n`;
+    }
+    
+    // 奖品图片（如果有）
+    if (lotteryData.prize_image && lotteryData.prize_image.trim()) {
+      placeholder += `奖品图片：${lotteryData.prize_image}\n`;
+    }
+    
+    placeholder += `[/lottery]\n\n`;
+    
+    return placeholder;
   }
 
   // 取消操作
