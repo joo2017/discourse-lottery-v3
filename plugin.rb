@@ -1,6 +1,6 @@
 # name: discourse-lottery-v3
 # about: A comprehensive and robust lottery plugin for Discourse, based on the V3 blueprint.
-# version: 0.1.3
+# version: 0.1.4
 # authors: [Your Name]
 # url: [Your GitHub Repo URL]
 
@@ -31,7 +31,7 @@ after_initialize do
       id: lottery.id,
       prize_name: lottery.prize_name,
       prize_details: lottery.prize_details,
-      draw_time: lottery.draw_time&.iso8801,
+      draw_time: lottery.draw_time&.iso8601,  # 修正：iso8801 -> iso8601
       winners_count: lottery.winners_count,
       min_participants: lottery.min_participants,
       backup_strategy: lottery.backup_strategy,
@@ -55,7 +55,7 @@ after_initialize do
       id: lottery.id,
       prize_name: lottery.prize_name,
       prize_details: lottery.prize_details,
-      draw_time: lottery.draw_time&.iso8801,
+      draw_time: lottery.draw_time&.iso8601,  # 修正：iso8801 -> iso8601
       winners_count: lottery.winners_count,
       min_participants: lottery.min_participants,
       backup_strategy: lottery.backup_strategy,
@@ -102,7 +102,8 @@ after_initialize do
     
     Rails.logger.info "LotteryPlugin: Topic created #{topic.id}, checking for lottery data"
     
-    lottery_data_json = params[:custom_fields]&.[]('lottery')
+    # 修正：使用topic.custom_fields而不是params[:custom_fields]
+    lottery_data_json = topic.custom_fields['lottery']
     
     if lottery_data_json.present?
       Rails.logger.info "LotteryPlugin: Found lottery data: #{lottery_data_json}"
@@ -224,16 +225,31 @@ after_initialize do
           lottery = Lottery.find(lottery_id)
           post = lottery.post
           
-          Guardian.new(Discourse.system_user).ensure_can_lock!(post)
-          post.update_locked(Discourse.system_user, true)
-
-          PostCreator.create!(
-            Discourse.system_user,
-            topic_id: lottery.topic_id,
-            raw: "🔒 抽奖信息已锁定，不允许再次编辑。如需修改，请联系管理员。"
-          )
+          # 修正：使用系统用户的 Guardian
+          guardian = Guardian.new(Discourse.system_user)
           
-          Rails.logger.info "LockLotteryPost Job: Locked post for lottery #{lottery_id}"
+          # 检查权限
+          if guardian.can_lock_post?(post)
+            # 使用 PostActionCreator 来锁定帖子
+            PostActionCreator.new(
+              Discourse.system_user,
+              post,
+              PostActionType.types[:staff_took_action]
+            ).perform
+            
+            # 设置帖子为锁定状态
+            post.update!(locked_by_id: Discourse.system_user.id)
+            
+            PostCreator.create!(
+              Discourse.system_user,
+              topic_id: lottery.topic_id,
+              raw: "🔒 抽奖信息已锁定，不允许再次编辑。如需修改，请联系管理员。"
+            )
+            
+            Rails.logger.info "LockLotteryPost Job: Locked post for lottery #{lottery_id}"
+          else
+            Rails.logger.warn "LockLotteryPost Job: No permission to lock post for lottery #{lottery_id}"
+          end
         rescue => e
           Rails.logger.error "LockLotteryPost Job: Failed: #{e.message}"
         end
@@ -283,14 +299,27 @@ after_initialize do
           
           Rails.logger.info "UpdateLotteryFromEdit Job: Updating lottery #{lottery_id} from post edit"
           
-          lottery_data = extract_lottery_data_from_content(post.raw)
+          # 检查是否有新的抽奖数据在 custom_fields 中
+          new_lottery_data = post.topic.custom_fields['lottery']
           
-          if lottery_data.present?
-            LotteryCreator.new(lottery.topic, lottery_data, lottery.user).update_existing(lottery)
-            
-            Rails.logger.info "UpdateLotteryFromEdit Job: Updated lottery successfully"
+          if new_lottery_data.present?
+            begin
+              parsed_data = JSON.parse(new_lottery_data)
+              LotteryCreator.new(lottery.topic, parsed_data, lottery.user).update_existing(lottery)
+              Rails.logger.info "UpdateLotteryFromEdit Job: Updated lottery successfully"
+            rescue JSON::ParserError => e
+              Rails.logger.error "UpdateLotteryFromEdit Job: Failed to parse lottery data: #{e.message}"
+            end
           else
-            Rails.logger.warn "UpdateLotteryFromEdit Job: No valid lottery data found in edited content"
+            # 从帖子内容中解析（后备方案）
+            lottery_data = extract_lottery_data_from_content(post.raw)
+            
+            if lottery_data.present?
+              LotteryCreator.new(lottery.topic, lottery_data, lottery.user).update_existing(lottery)
+              Rails.logger.info "UpdateLotteryFromEdit Job: Updated lottery successfully from post content"
+            else
+              Rails.logger.warn "UpdateLotteryFromEdit Job: No valid lottery data found"
+            end
           end
         rescue => e
           Rails.logger.error "UpdateLotteryFromEdit Job: Failed: #{e.message}"
