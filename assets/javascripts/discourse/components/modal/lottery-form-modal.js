@@ -10,7 +10,7 @@ export default class LotteryFormModal extends Component {
   @service site;
   @service appEvents;
 
-  // 表单数据（使用 @tracked 进行响应式更新）
+  // 表单数据
   @tracked prizeName = "";
   @tracked prizeDetails = "";
   @tracked drawTime = "";
@@ -38,14 +38,11 @@ export default class LotteryFormModal extends Component {
   }
 
   initializeDefaults() {
-    // 初始化最小参与人数
     const globalMin = this.args.model?.siteSettings?.lottery_min_participants_global || 5;
     this.minParticipants = globalMin;
     
-    // 设置默认开奖时间（1小时后）
     const defaultTime = new Date();
     defaultTime.setHours(defaultTime.getHours() + 1);
-    // 转换为本地时间字符串，移除秒和毫秒
     this.drawTime = new Date(defaultTime.getTime() - defaultTime.getTimezoneOffset() * 60000)
                     .toISOString().slice(0, 16);
 
@@ -58,7 +55,6 @@ export default class LotteryFormModal extends Component {
     this.validationErrors = {};
     let isValid = true;
 
-    // 检查必填字段
     if (isBlank(this.prizeName)) {
       this.validationErrors.prizeName = "活动名称不能为空";
       isValid = false;
@@ -89,13 +85,11 @@ export default class LotteryFormModal extends Component {
       }
     }
 
-    // 验证参与门槛
     if (this.minParticipants < this.globalMinParticipants) {
       this.validationErrors.minParticipants = `参与门槛不能低于全局设置的 ${this.globalMinParticipants} 人`;
       isValid = false;
     }
 
-    // 验证获奖人数
     if (this.winnersCount < 1) {
       this.validationErrors.winnersCount = "获奖人数必须至少为1";
       isValid = false;
@@ -104,7 +98,6 @@ export default class LotteryFormModal extends Component {
       isValid = false;
     }
 
-    // 验证指定楼层格式（如果填写了）
     if (isPresent(this.specifiedPosts)) {
       const posts = this.specifiedPosts.split(',').map(p => p.trim()).filter(p => p);
       const numbers = posts.map(p => parseInt(p)).filter(n => !isNaN(n) && n > 1);
@@ -118,7 +111,6 @@ export default class LotteryFormModal extends Component {
       }
     }
 
-    // 验证补充说明长度
     if (isPresent(this.additionalNotes) && this.additionalNotes.length > 300) {
       this.validationErrors.additionalNotes = "补充说明不能超过300个字符";
       isValid = false;
@@ -128,19 +120,16 @@ export default class LotteryFormModal extends Component {
     return isValid;
   }
 
-  // 获取全局最小参与人数
   get globalMinParticipants() {
     return this.args.model?.siteSettings?.lottery_min_participants_global || 5;
   }
 
-  // 显示 flash 消息
   @action
   showFlash(message, type = "error") {
     console.log("🎲 显示 flash 消息:", message, type);
     this.flash = message;
     this.flashType = type;
     
-    // 自动清除成功消息
     if (type === "success") {
       setTimeout(() => {
         this.clearFlash();
@@ -148,7 +137,6 @@ export default class LotteryFormModal extends Component {
     }
   }
 
-  // 清除 flash 消息
   @action
   clearFlash() {
     this.flash = "";
@@ -209,19 +197,16 @@ export default class LotteryFormModal extends Component {
     delete this.validationErrors.additionalNotes;
   }
 
-  // 处理图片上传 - 修正版本
   @action
   async handleImageUpload(event) {
     const file = event.target.files[0];
     if (!file) return;
 
-    // 验证文件类型
     if (!file.type.startsWith('image/')) {
       this.showFlash("请选择图片文件", "error");
       return;
     }
 
-    // 验证文件大小 (3MB)
     if (file.size > 3 * 1024 * 1024) {
       this.showFlash("图片文件大小不能超过 3MB", "error");
       return;
@@ -231,17 +216,15 @@ export default class LotteryFormModal extends Component {
     console.log("🎲 开始上传图片:", file.name);
 
     try {
-      // 创建预览
       const reader = new FileReader();
       reader.onload = (e) => {
         this.prizeImagePreview = e.target.result;
       };
       reader.readAsDataURL(file);
 
-      // 使用 discourse/lib/ajax 进行上传
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('upload_type', 'composer'); // 修正：使用 upload_type 而不是 type
+      formData.append('upload_type', 'composer');
 
       const response = await ajax('/uploads.json', {
         method: 'POST',
@@ -266,12 +249,10 @@ export default class LotteryFormModal extends Component {
     }
   }
 
-  // 移除图片
   @action
   removeImage() {
     this.prizeImage = "";
     this.prizeImagePreview = "";
-    // 清除文件输入框
     const fileInput = document.getElementById('lottery-image-upload');
     if (fileInput) {
       fileInput.value = '';
@@ -279,7 +260,7 @@ export default class LotteryFormModal extends Component {
     console.log("🎲 移除图片");
   }
 
-  // 提交表单 - 修正版本
+  // 关键修复：正确传递数据到后端
   @action
   async submit() {
     console.log("🎲 开始提交抽奖表单");
@@ -311,21 +292,35 @@ export default class LotteryFormModal extends Component {
 
       console.log("🎲 构建的抽奖数据对象:", lotteryData);
 
-      // 将抽奖数据保存到 composer model 的 custom_fields
       const composer = this.args.model?.composer;
       console.log("🎲 获取编辑器实例:", composer);
       
       if (composer && composer.get) {
         const model = composer.get("model");
         
-        // 确保 custom_fields 存在
+        // 关键修复：确保数据能通过多种方式传递到后端
+        
+        // 方法1：保存到 custom_fields (原有方式)
         if (!model.custom_fields) {
           model.set("custom_fields", {});
         }
-        
-        // 保存抽奖数据到 custom_fields
         model.set("custom_fields.lottery", JSON.stringify(lotteryData));
         model.notifyPropertyChange("custom_fields");
+        
+        // 方法2：直接设置到模型属性，确保在 opts 中可用
+        model.set("lottery", JSON.stringify(lotteryData));
+        model.notifyPropertyChange("lottery");
+        
+        // 方法3：添加到创建参数中
+        const currentOpts = model.get("opts") || {};
+        currentOpts.lottery = JSON.stringify(lotteryData);
+        model.set("opts", currentOpts);
+        model.notifyPropertyChange("opts");
+        
+        console.log("🎲 多重数据保存完成:");
+        console.log("  - custom_fields:", model.custom_fields);
+        console.log("  - lottery:", model.get("lottery"));
+        console.log("  - opts:", model.get("opts"));
         
         // 构建并插入显示内容
         const placeholder = this.buildLotteryPlaceholder(lotteryData);
@@ -333,7 +328,6 @@ export default class LotteryFormModal extends Component {
         model.set("reply", currentText + placeholder);
 
         console.log("🎲 抽奖内容成功插入到编辑器");
-        console.log("🎲 Custom fields 已保存:", model.custom_fields);
         
         // 显示成功消息
         this.showFlash("抽奖信息已插入编辑器", "success");
