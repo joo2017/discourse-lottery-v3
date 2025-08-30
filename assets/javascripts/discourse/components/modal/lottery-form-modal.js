@@ -1,4 +1,4 @@
-// assets/javascripts/discourse/components/modal/lottery-form-modal.js (FINAL & COMPLETE CODE)
+// assets/javascripts/discourse/components/modal/lottery-form-modal.js (CORRECTED AND COMPLETE CODE)
 import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
@@ -118,7 +118,6 @@ export default class LotteryFormModal extends Component {
       const model = composer.get("model");
       const lotteryJSON = JSON.stringify(lotteryData);
 
-      // 核心修改: 将所有数据打包，放入名为 'lottery' 的 “特殊信封” 中。
       model.set("lottery", lotteryJSON);
 
       const placeholder = this.buildLotteryPlaceholder(lotteryData);
