@@ -1,4 +1,4 @@
-# config/settings.yml - Discourse Lottery V3 Plugin Settings
+# config/settings.yml - 符合 Discourse 2025 官方标准
 
 plugins:
   # 抽奖功能总开关
@@ -39,15 +39,6 @@ plugins:
     client: false
     description: "这些用户组的成员将被排除在所有抽奖活动之外"
 
-  # 抽奖结果保留天数
-  lottery_results_retention_days:
-    default: 365
-    type: integer
-    min: 30
-    max: 3650  # 最大10年
-    client: false
-    description: "抽奖结果的保留天数，超过此时间的已完成抽奖记录将被自动清理"
-
   # 单用户最大同时进行的抽奖数量
   lottery_max_concurrent_per_user:
     default: 3
@@ -63,26 +54,6 @@ plugins:
     client: false
     description: "开奖完成后是否自动关闭抽奖主题"
 
-  # 允许编辑的最大时间窗口（小时）
-  lottery_max_edit_window_hours:
-    default: 24
-    type: integer
-    min: 1
-    max: 168  # 最大一周
-    client: false
-    description: "抽奖创建后的最大可编辑时间窗口（小时），即使在后悔期内也不能超过此时间"
-
-  # 开奖通知方式
-  lottery_notification_methods:
-    default: "pm|mention"
-    type: enum
-    choices:
-      - pm
-      - mention
-      - pm|mention
-    client: false
-    description: "中奖通知方式：pm=私信，mention=在主题中@用户，pm|mention=两种方式都使用"
-
   # 抽奖图片上传限制
   lottery_image_max_size_mb:
     default: 3
@@ -97,27 +68,6 @@ plugins:
     default: "jpg|jpeg|png|gif|webp"
     client: true
     description: "允许上传的图片格式，用|分隔"
-
-  # 抽奖标签颜色配置
-  lottery_tag_colors:
-    default: '{"抽奖中": "#3498db", "已开奖": "#2ecc71", "已取消": "#e74c3c"}'
-    client: false
-    description: "抽奖状态标签的颜色配置（JSON格式）"
-
-  # 开奖提前提醒时间
-  lottery_reminder_before_draw_hours:
-    default: 1
-    type: integer
-    min: 0
-    max: 72
-    client: false
-    description: "开奖前多少小时发送提醒通知（设置为0禁用提醒）"
-
-  # 抽奖活动统计
-  lottery_enable_statistics:
-    default: true
-    client: false
-    description: "是否启用抽奖活动统计功能"
 
   # 指定楼层最大数量
   lottery_max_specified_posts:
