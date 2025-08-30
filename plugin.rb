@@ -1,6 +1,6 @@
 # name: discourse-lottery-v3
 # about: A comprehensive and robust lottery plugin for Discourse, based on the V3 blueprint.
-# version: 0.1.6
+# version: 0.1.7
 # authors: [Your Name]
 # url: [Your GitHub Repo URL]
 
@@ -16,19 +16,15 @@ after_initialize do
   Rails.logger.info "LotteryPlugin: Starting initialization"
 
   # ===================================================================
-  # 注册自定义字段类型和权限
+  # 注册自定义字段类型
   # ===================================================================
   
   Post.register_custom_field_type('lottery_data', :json)
   Topic.register_custom_field_type('lottery', :json)
   Topic.register_custom_field_type('lottery_display_data', :json)
   
-  # 添加创建帖子时的自定义参数权限
-  DiscoursePluginRegistry.serialized_current_user_fields << "lottery_enabled"
-  
-  # 允许客户端传递 lottery 参数
-  add_permitted_post_create_param('lottery')
-  add_permitted_topic_create_param('lottery')
+  # 允许创建帖子时传递自定义参数
+  PostCreator::WHITELIST << :lottery if defined?(PostCreator::WHITELIST)
 
   # ===================================================================
   # 扩展序列化器
@@ -110,21 +106,23 @@ after_initialize do
   # 修复后的事件监听器 - 解决竞态条件
   # ===================================================================
   
-  # 监听话题创建事件 - 优先从 opts 获取数据
-  DiscourseEvent.on(:topic_created) do |topic, opts, user|
+  # 监听话题创建事件
+  DiscourseEvent.on(:topic_created) do |topic, params, user|
     next unless SiteSetting.lottery_enabled
     
     Rails.logger.info "=== LOTTERY DEBUG START ==="
     Rails.logger.info "LotteryPlugin: Topic created #{topic.id}"
-    Rails.logger.info "LotteryPlugin: Opts keys: #{opts.keys.inspect}"
+    Rails.logger.info "LotteryPlugin: Params keys: #{params.keys.inspect if params}"
     Rails.logger.info "LotteryPlugin: Plugin enabled: #{SiteSetting.lottery_enabled}"
+    
+    # 检查 topic.custom_fields 中的抽奖数据
+    topic.reload if topic.persisted?
+    lottery_data_json = topic.custom_fields['lottery']
+    Rails.logger.info "LotteryPlugin: Custom fields lottery data: #{lottery_data_json}"
     Rails.logger.info "=== LOTTERY DEBUG END ==="
     
-    # 方法1：优先从 opts 获取抽奖数据（最可靠）
-    lottery_data_json = opts['lottery'] || opts[:lottery] || opts['custom_fields']&.dig('lottery')
-    
     if lottery_data_json.present?
-      Rails.logger.info "LotteryPlugin: Found lottery data in opts: #{lottery_data_json}"
+      Rails.logger.info "LotteryPlugin: Found lottery data in custom_fields: #{lottery_data_json}"
       
       # 立即处理抽奖数据
       Jobs.enqueue(:process_lottery_immediate, {
@@ -133,10 +131,10 @@ after_initialize do
         user_id: user.id
       })
     else
-      # 方法2：延迟检查 custom_fields（备用方案）
-      Rails.logger.info "LotteryPlugin: No lottery data in opts, scheduling delayed check"
+      # 延迟检查 custom_fields（备用方案）
+      Rails.logger.info "LotteryPlugin: No lottery data found, scheduling delayed check"
       
-      Jobs.enqueue_in(2.seconds, :process_lottery_delayed, {
+      Jobs.enqueue_in(3.seconds, :process_lottery_delayed, {
         topic_id: topic.id,
         user_id: user.id
       })
@@ -168,11 +166,11 @@ after_initialize do
   Rails.logger.info "LotteryPlugin: Event handlers registered"
   
   # ===================================================================
-  # 后台任务定义 - 修复版本
+  # 后台任务定义
   # ===================================================================
   
   module ::Jobs
-    # 立即处理抽奖任务（从 opts 获取数据）
+    # 立即处理抽奖任务
     class ProcessLotteryImmediate < ::Jobs::Base
       def execute(args)
         topic_id = args[:topic_id]
@@ -232,7 +230,7 @@ after_initialize do
       end
     end
 
-    # 延迟处理抽奖任务（从 custom_fields 获取数据）
+    # 延迟处理抽奖任务
     class ProcessLotteryDelayed < ::Jobs::Base
       def execute(args)
         topic_id = args[:topic_id]
@@ -300,7 +298,7 @@ after_initialize do
       end
     end
 
-    # 原有的任务保持不变
+    # 错误信息发布任务
     class PostLotteryError < ::Jobs::Base
       def execute(args)
         topic_id = args[:topic_id]
@@ -319,6 +317,7 @@ after_initialize do
       end
     end
 
+    # 锁定帖子任务
     class LockLotteryPost < ::Jobs::Base
       def execute(args)
         lottery_id = args[:lottery_id]
@@ -347,6 +346,7 @@ after_initialize do
       end
     end
 
+    # 执行开奖任务
     class ExecuteLotteryDraw < ::Jobs::Base
       def execute(args)
         lottery_id = args[:lottery_id]
@@ -384,6 +384,7 @@ after_initialize do
       end
     end
 
+    # 从编辑更新抽奖任务
     class UpdateLotteryFromEdit < ::Jobs::Base
       def execute(args)
         lottery_id = args[:lottery_id]
