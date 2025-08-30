@@ -1,6 +1,6 @@
 # name: discourse-lottery-v3
 # about: A comprehensive and robust lottery plugin for Discourse, based on the V3 blueprint.
-# version: 0.1.7
+# version: 0.1.8
 # authors: [Your Name]
 # url: [Your GitHub Repo URL]
 
@@ -166,7 +166,7 @@ after_initialize do
   Rails.logger.info "LotteryPlugin: Event handlers registered"
   
   # ===================================================================
-  # 后台任务定义
+  # 后台任务定义 - 修复 custom_fields 访问
   # ===================================================================
   
   module ::Jobs
@@ -230,7 +230,7 @@ after_initialize do
       end
     end
 
-    # 延迟处理抽奖任务
+    # 延迟处理抽奖任务 - 修复版本
     class ProcessLotteryDelayed < ::Jobs::Base
       def execute(args)
         topic_id = args[:topic_id]
@@ -242,11 +242,21 @@ after_initialize do
           topic = Topic.find(topic_id)
           user = User.find(user_id)
           
-          # 强制重新加载 custom_fields
+          # 修复：使用正确的方法重新加载 custom_fields
           topic.reload
-          topic.refresh_custom_fields_from_db
+          topic.send(:refresh_custom_fields_from_db) if topic.respond_to?(:refresh_custom_fields_from_db, true)
           
           lottery_data_json = topic.custom_fields['lottery']
+          
+          # 如果仍然没有数据，尝试从数据库直接查询
+          if lottery_data_json.blank?
+            Rails.logger.info "ProcessLotteryDelayed Job: Custom fields empty, checking database directly"
+            
+            custom_field_record = TopicCustomField.find_by(topic_id: topic_id, name: 'lottery')
+            lottery_data_json = custom_field_record&.value
+            
+            Rails.logger.info "ProcessLotteryDelayed Job: Direct DB query result: #{lottery_data_json}"
+          end
           
           if lottery_data_json.present?
             Rails.logger.info "ProcessLotteryDelayed Job: Found lottery data: #{lottery_data_json}"
@@ -275,7 +285,8 @@ after_initialize do
             
             Rails.logger.info "ProcessLotteryDelayed Job: Successfully created lottery #{lottery.id}"
           else
-            Rails.logger.warn "ProcessLotteryDelayed Job: No lottery data found in custom_fields for topic #{topic_id}"
+            Rails.logger.warn "ProcessLotteryDelayed Job: No lottery data found anywhere for topic #{topic_id}"
+            Rails.logger.warn "ProcessLotteryDelayed Job: Available custom fields: #{topic.custom_fields.keys.inspect}"
           end
           
         rescue JSON::ParserError => e
@@ -384,7 +395,7 @@ after_initialize do
       end
     end
 
-    # 从编辑更新抽奖任务
+    # 从编辑更新抽奖任务 - 修复版本
     class UpdateLotteryFromEdit < ::Jobs::Base
       def execute(args)
         lottery_id = args[:lottery_id]
@@ -396,11 +407,17 @@ after_initialize do
           
           Rails.logger.info "UpdateLotteryFromEdit Job: Updating lottery #{lottery_id} from post edit"
           
-          # 强制重新加载 custom_fields
+          # 修复：使用正确的方法重新加载 custom_fields
           post.topic.reload
-          post.topic.refresh_custom_fields_from_db
+          post.topic.send(:refresh_custom_fields_from_db) if post.topic.respond_to?(:refresh_custom_fields_from_db, true)
           
           new_lottery_data = post.topic.custom_fields['lottery']
+          
+          # 如果 custom_fields 中没有，尝试从数据库直接查询
+          if new_lottery_data.blank?
+            custom_field_record = TopicCustomField.find_by(topic_id: post.topic_id, name: 'lottery')
+            new_lottery_data = custom_field_record&.value
+          end
           
           if new_lottery_data.present?
             begin
@@ -416,6 +433,8 @@ after_initialize do
             rescue JSON::ParserError => e
               Rails.logger.error "UpdateLotteryFromEdit Job: Failed to parse lottery data: #{e.message}"
             end
+          else
+            Rails.logger.warn "UpdateLotteryFromEdit Job: No updated lottery data found"
           end
         rescue => e
           Rails.logger.error "UpdateLotteryFromEdit Job: Failed: #{e.message}"
