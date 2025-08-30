@@ -1,6 +1,6 @@
 # name: discourse-lottery-v3
 # about: A comprehensive and robust lottery plugin for Discourse, based on the V3 blueprint.
-# version: 0.1.4
+# version: 0.1.5
 # authors: [Your Name]
 # url: [Your GitHub Repo URL]
 
@@ -16,12 +16,43 @@ after_initialize do
   Rails.logger.info "LotteryPlugin: Starting initialization"
 
   # ===================================================================
-  # 扩展序列化器 (修正版本)
+  # 注册自定义字段类型 (关键修复)
   # ===================================================================
   
-  # 扩展 TopicViewSerializer
+  # 注册自定义字段类型，确保数据正确序列化
+  Post.register_custom_field_type('lottery_data', :json)
+  Topic.register_custom_field_type('lottery', :json)
+
+  # ===================================================================
+  # 扩展序列化器 (修复版本 - 关键)
+  # ===================================================================
+  
+  # 扩展 PostSerializer - 为帖子添加抽奖数据
+  add_to_serializer(:post, :lottery_data, include_condition: -> {
+    # 只为主楼层且有抽奖数据的帖子包含此字段
+    object.post_number == 1 && object.topic&.lotteries&.exists?
+  }) do
+    lottery = object.topic.lotteries.first
+    return nil unless lottery
+
+    {
+      id: lottery.id,
+      prize_name: lottery.prize_name,
+      prize_details: lottery.prize_details,
+      draw_time: lottery.draw_time&.iso8601,
+      winners_count: lottery.winners_count,
+      min_participants: lottery.min_participants,
+      backup_strategy: lottery.backup_strategy,
+      lottery_type: lottery.lottery_type,
+      specified_posts: lottery.specified_post_numbers,
+      status: lottery.status,
+      additional_notes: lottery.additional_notes,
+      prize_image: lottery.prize_image
+    }
+  end
+  
+  # 扩展 TopicViewSerializer - 为主题添加抽奖数据
   add_to_serializer(:topic_view, :lottery_data, include_condition: -> {
-    # 检查 topic 是否存在并且有抽奖记录
     object.topic&.lotteries&.exists?
   }) do
     lottery = object.topic.lotteries.first
@@ -43,28 +74,11 @@ after_initialize do
     }
   end
 
-  # 扩展 PostSerializer
-  add_to_serializer(:post, :lottery_data, include_condition: -> {
-    # 只为主楼层显示抽奖数据
-    object.post_number == 1 && object.topic&.lotteries&.exists?
+  # 扩展 TopicListItemSerializer - 为主题列表添加抽奖标识
+  add_to_serializer(:topic_list_item, :has_lottery, include_condition: -> {
+    object.lotteries.exists?
   }) do
-    lottery = object.topic.lotteries.first
-    return nil unless lottery
-
-    {
-      id: lottery.id,
-      prize_name: lottery.prize_name,
-      prize_details: lottery.prize_details,
-      draw_time: lottery.draw_time&.iso8601,
-      winners_count: lottery.winners_count,
-      min_participants: lottery.min_participants,
-      backup_strategy: lottery.backup_strategy,
-      lottery_type: lottery.lottery_type,
-      specified_posts: lottery.specified_post_numbers,
-      status: lottery.status,
-      additional_notes: lottery.additional_notes,
-      prize_image: lottery.prize_image
-    }
+    true
   end
   
   Rails.logger.info "LotteryPlugin: Serializers extended"
@@ -102,7 +116,7 @@ after_initialize do
     
     Rails.logger.info "LotteryPlugin: Topic created #{topic.id}, checking for lottery data"
     
-    # 修正：使用topic.custom_fields而不是params[:custom_fields]
+    # 从 custom_fields 中获取抽奖数据
     lottery_data_json = topic.custom_fields['lottery']
     
     if lottery_data_json.present?
@@ -186,6 +200,12 @@ after_initialize do
             Rails.logger.info "CreateLottery Job: Scheduled lock job for #{lock_time}"
           end
           
+          # 关键修复：通知前端更新
+          MessageBus.publish("/topic/#{topic.id}", {
+            type: "lottery_created",
+            lottery_id: lottery.id
+          })
+          
           Rails.logger.info "CreateLottery Job: Successfully created lottery #{lottery.id}"
         rescue => e
           Rails.logger.error "CreateLottery Job: Failed: #{e.message}"
@@ -259,6 +279,13 @@ after_initialize do
           manager = LotteryManager.new(lottery)
           result = manager.execute_draw
           
+          # 通知前端更新
+          MessageBus.publish("/topic/#{lottery.topic_id}", {
+            type: "lottery_completed",
+            lottery_id: lottery.id,
+            status: lottery.status
+          })
+          
           Rails.logger.info "ExecuteLotteryDraw Job: Draw completed with result: #{result}"
         rescue => e
           Rails.logger.error "ExecuteLotteryDraw Job: Failed: #{e.message}"
@@ -298,55 +325,21 @@ after_initialize do
             begin
               parsed_data = JSON.parse(new_lottery_data)
               LotteryCreator.new(lottery.topic, parsed_data, lottery.user).update_existing(lottery)
+              
+              # 通知前端更新
+              MessageBus.publish("/topic/#{lottery.topic_id}", {
+                type: "lottery_updated",
+                lottery_id: lottery.id
+              })
+              
               Rails.logger.info "UpdateLotteryFromEdit Job: Updated lottery successfully"
             rescue JSON::ParserError => e
               Rails.logger.error "UpdateLotteryFromEdit Job: Failed to parse lottery data: #{e.message}"
-            end
-          else
-            # 从帖子内容中解析（后备方案）
-            lottery_data = extract_lottery_data_from_content(post.raw)
-            
-            if lottery_data.present?
-              LotteryCreator.new(lottery.topic, lottery_data, lottery.user).update_existing(lottery)
-              Rails.logger.info "UpdateLotteryFromEdit Job: Updated lottery successfully from post content"
-            else
-              Rails.logger.warn "UpdateLotteryFromEdit Job: No valid lottery data found"
             end
           end
         rescue => e
           Rails.logger.error "UpdateLotteryFromEdit Job: Failed: #{e.message}"
         end
-      end
-
-      private
-
-      def extract_lottery_data_from_content(content)
-        match = content.match(/\[lottery\](.*?)\[\/lottery\]/m)
-        return nil unless match
-
-        lottery_content = match[1]
-        data = {}
-
-        lottery_content.split("\n").each do |line|
-          line = line.strip
-          next if line.empty?
-          
-          if line.include?('：')
-            key, value = line.split('：', 2)
-            case key.strip
-            when '活动名称' then data['prize_name'] = value.strip
-            when '奖品说明' then data['prize_details'] = value.strip
-            when '开奖时间' then data['draw_time'] = value.strip
-            when '获奖人数' then data['winners_count'] = value.strip.to_i
-            when '指定楼层' then data['specified_posts'] = value.strip
-            when '参与门槛' then data['min_participants'] = value.gsub(/[^\d]/, '').to_i
-            when '补充说明' then data['additional_notes'] = value.strip
-            when '奖品图片' then data['prize_image'] = value.strip
-            end
-          end
-        end
-        data['backup_strategy'] ||= 'continue'
-        data
       end
     end
   end
