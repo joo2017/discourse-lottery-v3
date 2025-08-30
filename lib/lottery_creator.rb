@@ -29,8 +29,8 @@ class LotteryCreator
       # 添加标签
       add_lottery_tag!
       
-      # 关键修复：立即更新帖子内容和custom_fields，确保前端能立即看到效果
-      update_post_with_lottery_info_immediate!(lottery)
+      # 更新帖子和主题的自定义字段
+      update_post_and_topic_data!(lottery)
       
       Rails.logger.info "LotteryCreator: Successfully created lottery #{lottery.id}"
       return lottery
@@ -67,8 +67,8 @@ class LotteryCreator
         prize_image: data[:prize_image]
       )
       
-      # 更新帖子内容
-      update_post_with_lottery_info_immediate!(existing_lottery)
+      # 更新帖子和主题数据
+      update_post_and_topic_data!(existing_lottery)
       
       Rails.logger.info "LotteryCreator: Successfully updated lottery #{existing_lottery.id}"
       return existing_lottery
@@ -285,16 +285,11 @@ class LotteryCreator
     end
   end
 
-  # 关键修复：立即更新帖子内容，确保前端能立即看到效果
-  def update_post_with_lottery_info_immediate!(lottery)
-    Rails.logger.debug "LotteryCreator: Updating post with lottery info immediately"
+  def update_post_and_topic_data!(lottery)
+    Rails.logger.debug "LotteryCreator: Updating post and topic data"
     
     begin
-      # 1. 移除原有的 [lottery] 标签内容
-      current_content = post.raw
-      cleaned_content = current_content.gsub(/\[lottery\].*?\[\/lottery\]/m, '').strip
-      
-      # 2. 在 topic 的 custom_fields 中保存结构化的抽奖数据供前端使用
+      # 构建结构化的抽奖显示数据
       lottery_display_data = {
         id: lottery.id,
         prize_name: lottery.prize_name,
@@ -310,109 +305,19 @@ class LotteryCreator
         prize_image: lottery.prize_image
       }
       
-      # 保存到 topic 的 custom_fields 中
-      topic.custom_fields['lottery_display_data'] = lottery_display_data.to_json
+      # 使用官方推荐的方式设置自定义字段
+      topic.lottery_data = lottery_display_data
       topic.save_custom_fields
       
-      # 3. 同时保存到 post 的 custom_fields 中以确保序列化器能获取到
+      # 同时保存到 post 的自定义字段中
       post.custom_fields['lottery_data'] = lottery_display_data.to_json
       post.save_custom_fields
       
-      Rails.logger.info "LotteryCreator: Saved lottery display data to custom_fields"
-      Rails.logger.debug "LotteryCreator: Display data: #{lottery_display_data.inspect}"
-      
-      # 4. 构建美化的抽奖显示内容并更新帖子
-      lottery_display = build_lottery_display_content(lottery)
-      updated_content = lottery_display + "\n\n" + cleaned_content
-      
-      # 5. 更新帖子内容
-      PostRevisor.new(post, topic).revise!(
-        Discourse.system_user,
-        { raw: updated_content },
-        { bypass_rate_limiter: true, skip_validations: true }
-      )
-      
-      Rails.logger.debug "LotteryCreator: Updated post content with lottery display"
+      Rails.logger.info "LotteryCreator: Updated post and topic custom fields"
       
     rescue => e
-      Rails.logger.error "LotteryCreator: Failed to update post immediately: #{e.message}"
-      # 继续执行，不要因为显示更新失败而影响数据库保存
+      Rails.logger.error "LotteryCreator: Failed to update custom fields: #{e.message}"
+      # 继续执行，不要因为自定义字段更新失败而影响数据库保存
     end
-  end
-
-  def build_lottery_display_content(lottery)
-    content = <<~CONTENT
-      <div class="lottery-display-card lottery-status-#{lottery.status}" data-lottery-id="#{lottery.id}">
-        <div class="lottery-header">
-          <div class="lottery-title">
-            <span class="lottery-icon">🎲</span>
-            <h3>#{lottery.prize_name}</h3>
-          </div>
-          <div class="lottery-status">🏃 进行中</div>
-        </div>
-        <div class="lottery-content">
-    CONTENT
-
-    # 添加图片（如果有）
-    if lottery.prize_image.present?
-      content += <<~CONTENT
-          <div class="lottery-image">
-            <img src="#{lottery.prize_image}" alt="奖品图片" />
-          </div>
-      CONTENT
-    end
-
-    content += <<~CONTENT
-          <div class="lottery-details">
-            <div class="lottery-detail-item">
-              <span class="label">🎁 奖品说明：</span>
-              <span class="value">#{lottery.prize_details}</span>
-            </div>
-            <div class="lottery-detail-item">
-              <span class="label">⏰ 开奖时间：</span>
-              <span class="value">#{lottery.draw_time.strftime('%Y年%m月%d日 %H:%M')}</span>
-            </div>
-            <div class="lottery-detail-item">
-              <span class="label">🎯 抽奖方式：</span>
-              <span class="value">
-    CONTENT
-
-    if lottery.specified_type?
-      content += "指定楼层 (#{lottery.specified_post_numbers})"
-    else
-      content += "随机抽取 #{lottery.winners_count} 人"
-    end
-
-    content += <<~CONTENT
-              </span>
-            </div>
-            <div class="lottery-detail-item">
-              <span class="label">👥 参与门槛：</span>
-              <span class="value">至少 #{lottery.min_participants} 人参与</span>
-            </div>
-    CONTENT
-
-    # 添加补充说明（如果有）
-    if lottery.additional_notes.present?
-      content += <<~CONTENT
-            <div class="lottery-detail-item">
-              <span class="label">📝 补充说明：</span>
-              <span class="value">#{lottery.additional_notes}</span>
-            </div>
-      CONTENT
-    end
-
-    content += <<~CONTENT
-          </div>
-        </div>
-        <div class="lottery-footer">
-          <div class="participation-tip">
-            💡 <strong>参与方式：</strong>在本话题下回复即可参与抽奖
-          </div>
-        </div>
-      </div>
-    CONTENT
-
-    content
   end
 end
