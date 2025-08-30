@@ -1,4 +1,4 @@
-# lib/lottery_creator.rb
+# lib/lottery_creator.rb - 修复版本
 class LotteryCreator
   attr_reader :topic, :data, :user, :post
 
@@ -13,23 +13,13 @@ class LotteryCreator
     Rails.logger.info "LotteryCreator: Starting creation for topic #{topic.id}"
     Rails.logger.debug "LotteryCreator: Data received: #{data.inspect}"
     
-    # 前置检查
     validate_prerequisites!
-    
-    # 数据验证
     validate_data!
-    
-    # 智能判断抽奖方式
     determine_lottery_type!
     
     ActiveRecord::Base.transaction do
-      # 创建抽奖记录
       lottery = create_lottery_record!
-      
-      # 添加标签
       add_lottery_tag!
-      
-      # 更新帖子和主题的自定义字段
       update_post_and_topic_data!(lottery)
       
       Rails.logger.info "LotteryCreator: Successfully created lottery #{lottery.id}"
@@ -37,37 +27,41 @@ class LotteryCreator
     end
   rescue => e
     Rails.logger.error "LotteryCreator: Creation failed: #{e.message}"
-    Rails.logger.debug "LotteryCreator: #{e.backtrace.join("\n")}"
     raise e
   end
 
   def update_existing(existing_lottery)
     Rails.logger.info "LotteryCreator: Updating existing lottery #{existing_lottery.id}"
     
-    # 检查是否在可编辑期内
     unless existing_lottery.in_regret_period?
       raise "抽奖已过编辑期限，无法修改"
     end
 
-    # 验证数据
     validate_data!
     determine_lottery_type!
     
     ActiveRecord::Base.transaction do
-      # 更新抽奖记录
-      existing_lottery.update!(
+      # 动态更新，只更新存在的字段
+      update_attributes = {
         prize_name: data[:prize_name],
         prize_details: data[:prize_details],
         draw_time: parse_draw_time,
         winners_count: @winners_count,
         min_participants: data[:min_participants].to_i,
         lottery_type: @lottery_type,
-        specified_post_numbers: @specified_post_numbers,
-        additional_notes: data[:additional_notes],
-        prize_image: data[:prize_image]
-      )
+        specified_post_numbers: @specified_post_numbers
+      }
       
-      # 更新帖子和主题数据
+      # 检查字段是否存在再添加
+      if existing_lottery.respond_to?(:additional_notes=)
+        update_attributes[:additional_notes] = data[:additional_notes]&.strip
+      end
+      
+      if existing_lottery.respond_to?(:prize_image=)
+        update_attributes[:prize_image] = data[:prize_image]&.strip
+      end
+      
+      existing_lottery.update!(update_attributes)
       update_post_and_topic_data!(existing_lottery)
       
       Rails.logger.info "LotteryCreator: Successfully updated lottery #{existing_lottery.id}"
@@ -108,7 +102,6 @@ class LotteryCreator
   def validate_data!
     Rails.logger.debug "LotteryCreator: Validating data"
     
-    # 检查必填字段
     required_fields = {
       'prize_name' => '活动名称',
       'prize_details' => '奖品说明', 
@@ -121,16 +114,9 @@ class LotteryCreator
       raise "缺少必填字段：#{field_names}"
     end
 
-    # 验证字段长度
     validate_field_length!
-
-    # 验证最小参与人数
     validate_min_participants!
-
-    # 验证开奖时间
     validate_draw_time!
-    
-    Rails.logger.debug "LotteryCreator: Data validation passed"
   end
 
   def validate_field_length!
@@ -171,7 +157,6 @@ class LotteryCreator
       raise "开奖时间必须是未来时间"
     end
 
-    # 检查时间不能太远（比如不超过1年）
     if draw_time > 1.year.from_now
       raise "开奖时间不能超过一年"
     end
@@ -181,13 +166,10 @@ class LotteryCreator
     @parsed_draw_time ||= begin
       time_str = data[:draw_time].to_s.strip
       
-      # 尝试解析时间
       begin
         if time_str.match?(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/)
-          # HTML datetime-local 格式
           DateTime.parse(time_str)
         elsif time_str.match?(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/)
-          # 标准格式
           DateTime.parse(time_str)
         else
           DateTime.parse(time_str)
@@ -202,13 +184,12 @@ class LotteryCreator
     if data[:specified_posts].present? && data[:specified_posts].strip.present?
       @lottery_type = 'specified'
       
-      # 解析并验证指定楼层
       posts_str = data[:specified_posts].strip
       begin
         posts = posts_str.split(',').map(&:strip).map(&:to_i).select { |n| n > 1 }
         
         if posts.empty?
-          raise "指定楼层格式错误，请使用逗号分隔的数字，如：8,18,28"
+          raise "指定楼层格式错误，请使用逗号分隔的数字"
         end
         
         if posts != posts.uniq
@@ -218,7 +199,6 @@ class LotteryCreator
         @specified_post_numbers = posts.join(',')
         @winners_count = posts.length
         
-        Rails.logger.debug "LotteryCreator: Determined type as 'specified' with posts: #{@specified_post_numbers}"
       rescue => e
         raise "指定楼层解析失败：#{e.message}"
       end
@@ -226,7 +206,6 @@ class LotteryCreator
       @lottery_type = 'random'
       @specified_post_numbers = nil
       
-      # 验证获奖人数
       winners_count = data[:winners_count].to_i
       if winners_count < 1
         @winners_count = 1
@@ -235,15 +214,14 @@ class LotteryCreator
       else
         @winners_count = winners_count
       end
-      
-      Rails.logger.debug "LotteryCreator: Determined type as 'random' with #{@winners_count} winners"
     end
   end
 
   def create_lottery_record!
     Rails.logger.debug "LotteryCreator: Creating lottery record"
     
-    lottery = Lottery.create!(
+    # 基础属性（所有版本都有的字段）
+    base_attributes = {
       topic_id: topic.id,
       post_id: post.id,
       user_id: user.id,
@@ -255,10 +233,19 @@ class LotteryCreator
       backup_strategy: data[:backup_strategy] || 'continue',
       lottery_type: @lottery_type,
       specified_post_numbers: @specified_post_numbers,
-      additional_notes: data[:additional_notes]&.strip,
-      prize_image: data[:prize_image]&.strip,
       status: 'running'
-    )
+    }
+    
+    # 检查可选字段是否存在，存在才添加
+    if Lottery.column_names.include?('additional_notes')
+      base_attributes[:additional_notes] = data[:additional_notes]&.strip
+    end
+    
+    if Lottery.column_names.include?('prize_image')
+      base_attributes[:prize_image] = data[:prize_image]&.strip
+    end
+    
+    lottery = Lottery.create!(base_attributes)
     
     Rails.logger.info "LotteryCreator: Created lottery record with ID #{lottery.id}"
     lottery
@@ -266,22 +253,19 @@ class LotteryCreator
 
   def add_lottery_tag!
     begin
-      # 创建或获取抽奖标签
       lottery_tag = Tag.find_or_create_by!(name: '抽奖中') do |tag|
         tag.target_tag_id = nil
         tag.public_topic_count = 0
       end
       
-      # 添加标签到主题
       unless topic.tags.include?(lottery_tag)
         topic.tags << lottery_tag
         topic.save!
       end
       
-      Rails.logger.debug "LotteryCreator: Added '抽奖中' tag"
+      Rails.logger.debug "LotteryCreator: Added lottery tag"
     rescue => e
       Rails.logger.warn "LotteryCreator: Failed to add tag: #{e.message}"
-      # 不要因为标签添加失败而终止整个流程
     end
   end
 
@@ -289,7 +273,7 @@ class LotteryCreator
     Rails.logger.debug "LotteryCreator: Updating post and topic data"
     
     begin
-      # 构建结构化的抽奖显示数据
+      # 构建显示数据，只包含实际存在的字段
       lottery_display_data = {
         id: lottery.id,
         prize_name: lottery.prize_name,
@@ -300,24 +284,29 @@ class LotteryCreator
         backup_strategy: lottery.backup_strategy,
         lottery_type: lottery.lottery_type,
         specified_posts: lottery.specified_post_numbers,
-        status: lottery.status,
-        additional_notes: lottery.additional_notes,
-        prize_image: lottery.prize_image
+        status: lottery.status
       }
+      
+      # 安全地添加可选字段
+      if lottery.respond_to?(:additional_notes) && lottery.additional_notes.present?
+        lottery_display_data[:additional_notes] = lottery.additional_notes
+      end
+      
+      if lottery.respond_to?(:prize_image) && lottery.prize_image.present?
+        lottery_display_data[:prize_image] = lottery.prize_image
+      end
       
       # 使用官方推荐的方式设置自定义字段
       topic.lottery_data = lottery_display_data
       topic.save_custom_fields
       
-      # 同时保存到 post 的自定义字段中
       post.custom_fields['lottery_data'] = lottery_display_data.to_json
       post.save_custom_fields
       
-      Rails.logger.info "LotteryCreator: Updated post and topic custom fields"
+      Rails.logger.info "LotteryCreator: Updated custom fields successfully"
       
     rescue => e
       Rails.logger.error "LotteryCreator: Failed to update custom fields: #{e.message}"
-      # 继续执行，不要因为自定义字段更新失败而影响数据库保存
     end
   end
 end
