@@ -1,38 +1,49 @@
-// assets/javascripts/discourse/initializers/lottery-initializer.js (ISOLATION DEBUGGING VERSION)
+// assets/javascripts/discourse/initializers/lottery-initializer.js (FINAL, PRODUCTION-READY CODE)
 import { withPluginApi } from "discourse/lib/plugin-api";
-// import LotteryFormModal from "../components/modal/lottery-form-modal"; // 步骤1：暂时注释掉这行导入，移除依赖
+import LotteryFormModal from "../components/modal/lottery-form-modal"; // 现在这个导入应该是安全的
 
 export default {
   name: "lottery-initializer",
   initialize() {
     withPluginApi("1.4.0", (api) => {
-      console.log("LOTTERY ISOLATION DEBUG: Initializer is running.");
-
       api.serializeOnCreate('lottery');
 
+      function canInsertLottery(composer) {
+        if (!composer || !composer.get("model")) { return false; }
+        const siteSettings = api.container.lookup("service:site-settings");
+        if (!siteSettings.lottery_allowed_categories) { return true; }
+        const allowedIds = siteSettings.lottery_allowed_categories.split("|").map(id => parseInt(id.trim(), 10)).filter(id => id > 0);
+        if (allowedIds.length === 0) { return true; }
+        const currentCategoryId = parseInt(composer.get("model").categoryId || 0, 10);
+        return allowedIds.includes(currentCategoryId);
+      }
+
       api.onToolbarCreate((toolbar) => {
-        // 如果您能在控制台看到下面这行字，就证明我们找对问题了！
-        console.log("LOTTERY ISOLATION DEBUG: SUCCESS! onToolbarCreate hook has been triggered.");
-
-        toolbar.addButton({
-          id: "insertLottery",
-          group: "extras",
-          icon: "dice",
-          title: "抽奖按钮 (隔离调试)",
-          perform: (e) => {
-            // 步骤2：暂时用一个简单的 alert 替换掉打开模态框的功能
-            // 这确保了按钮的点击事件不会因为 LotteryFormModal 的问题而出错
-            alert("抽奖按钮可以点击了！下一步是修复模态框。");
-            
-            // const modal = api.container.lookup("service:modal");
-            // modal.show(LotteryFormModal, { /* ... */ });
-          }
-        });
-
-        console.log("LOTTERY ISOLATION DEBUG: Lottery button should now be added to the toolbar.");
+        if (toolbar.context.creatingTopic) {
+          toolbar.addButton({
+            id: "insertLottery",
+            group: "extras",
+            icon: "dice",
+            title: "js.lottery.toolbar.title",
+            perform: (e) => {
+              const siteSettings = api.container.lookup("service:site-settings");
+              if (!siteSettings.lottery_enabled) {
+                api.container.lookup("service:dialog").alert("抽奖功能当前已被管理员禁用。");
+                return;
+              }
+              const composer = api.container.lookup("controller:composer");
+              if (!canInsertLottery(composer)) {
+                 api.container.lookup("service:dialog").alert("当前分类不允许创建抽奖活动。");
+                 return;
+              }
+              const modal = api.container.lookup("service:modal");
+              modal.show(LotteryFormModal, {
+                model: { composer: composer, siteSettings: siteSettings }
+              });
+            }
+          });
+        }
       });
-
-      console.log("LOTTERY ISOLATION DEBUG: Initializer has finished setup.");
     });
   },
 };
