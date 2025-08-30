@@ -2,7 +2,7 @@
 import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
-import { service } from "@ember/service"; // 官方推荐方式
+import { service } from "@ember/service";
 import { isBlank, isPresent } from "@ember/utils";
 import { ajax } from "discourse/lib/ajax";
 
@@ -10,6 +10,7 @@ export default class LotteryFormModal extends Component {
   @service modal;
   @service site;
   @service appEvents;
+  @service dialog;
 
   // 表单数据
   @tracked prizeName = "";
@@ -20,10 +21,10 @@ export default class LotteryFormModal extends Component {
   @tracked minParticipants = 5;
   @tracked backupStrategy = "continue";
   @tracked additionalNotes = "";
-  @tracked prizeImage = "";  
-  @tracked prizeImagePreview = "";  
-  @tracked isImageUploading = false;  
-  
+  @tracked prizeImage = "";
+  @tracked prizeImagePreview = "";
+  @tracked isImageUploading = false;
+
   // 状态管理
   @tracked isLoading = false;
   @tracked flash = "";
@@ -36,15 +37,21 @@ export default class LotteryFormModal extends Component {
   }
 
   initializeDefaults() {
-    const globalMin = this.args.model?.siteSettings?.lottery_min_participants_global || 5;
-    this.minParticipants = globalMin;
-    
+    this.minParticipants = this.globalMinParticipants;
+
+    // 设置默认开奖时间为1小时后
     const defaultTime = new Date();
     defaultTime.setHours(defaultTime.getHours() + 1);
-    this.drawTime = new Date(defaultTime.getTime() - defaultTime.getTimezoneOffset() * 60000)
+    this.drawTime = new Date(defaultTime.getTime() - (defaultTime.getTimezoneOffset() * 60000))
                     .toISOString().slice(0, 16);
   }
 
+  get globalMinParticipants() {
+    // 确保从 siteSettings 获取，如果失败则提供一个安全默认值
+    return this.args.model?.siteSettings?.lottery_min_participants_global || 5;
+  }
+  
+  // 实时前端校验逻辑
   get isValid() {
     this.validationErrors = {};
     let isValid = true;
@@ -92,9 +99,9 @@ export default class LotteryFormModal extends Component {
     if (isPresent(this.specifiedPosts)) {
       const posts = this.specifiedPosts.split(',').map(p => p.trim()).filter(p => p);
       const numbers = posts.map(p => parseInt(p)).filter(n => !isNaN(n) && n > 1);
-      
+
       if (posts.length !== numbers.length || numbers.length === 0) {
-        this.validationErrors.specifiedPosts = "指定楼层格式错误";
+        this.validationErrors.specifiedPosts = "指定楼层格式错误，且楼层号必须>1";
         isValid = false;
       } else if (numbers.length !== [...new Set(numbers)].length) {
         this.validationErrors.specifiedPosts = "指定楼层不能包含重复数字";
@@ -106,77 +113,21 @@ export default class LotteryFormModal extends Component {
       this.validationErrors.additionalNotes = "补充说明不能超过300个字符";
       isValid = false;
     }
-    
+
     return isValid;
   }
 
-  get globalMinParticipants() {
-    return this.args.model?.siteSettings?.lottery_min_participants_global || 5;
-  }
+  @action showFlash(message, type = "error") { this.flash = message; this.flashType = type; }
+  @action clearFlash() { this.flash = ""; this.flashType = ""; }
 
-  @action
-  showFlash(message, type = "error") {
-    this.flash = message;
-    this.flashType = type;
-    
-    if (type === "success") {
-      setTimeout(() => {
-        this.clearFlash();
-      }, 3000);
-    }
-  }
-
-  @action
-  clearFlash() {
-    this.flash = "";
-    this.flashType = "";
-  }
-
-  // 更新表单字段
-  @action updatePrizeName(event) {
-    this.prizeName = event.target.value;
-    this.clearFlash();
-    delete this.validationErrors.prizeName;
-  }
-
-  @action updatePrizeDetails(event) {
-    this.prizeDetails = event.target.value;
-    this.clearFlash();
-    delete this.validationErrors.prizeDetails;
-  }
-
-  @action updateDrawTime(event) {
-    this.drawTime = event.target.value;
-    this.clearFlash();
-    delete this.validationErrors.drawTime;
-  }
-
-  @action updateWinnersCount(event) {
-    const value = parseInt(event.target.value);
-    this.winnersCount = isNaN(value) ? 1 : Math.max(1, Math.min(100, value));
-    delete this.validationErrors.winnersCount;
-  }
-
-  @action updateSpecifiedPosts(event) {
-    this.specifiedPosts = event.target.value;
-    delete this.validationErrors.specifiedPosts;
-  }
-
-  @action updateMinParticipants(event) {
-    const value = parseInt(event.target.value);
-    this.minParticipants = isNaN(value) ? this.globalMinParticipants : Math.max(value, this.globalMinParticipants);
-    this.clearFlash();
-    delete this.validationErrors.minParticipants;
-  }
-
-  @action updateBackupStrategy(event) {
-    this.backupStrategy = event.target.value;
-  }
-
-  @action updateAdditionalNotes(event) {
-    this.additionalNotes = event.target.value;
-    delete this.validationErrors.additionalNotes;
-  }
+  @action updatePrizeName(event) { this.prizeName = event.target.value; }
+  @action updatePrizeDetails(event) { this.prizeDetails = event.target.value; }
+  @action updateDrawTime(event) { this.drawTime = event.target.value; }
+  @action updateWinnersCount(event) { this.winnersCount = parseInt(event.target.value, 10) || 1; }
+  @action updateSpecifiedPosts(event) { this.specifiedPosts = event.target.value; }
+  @action updateMinParticipants(event) { this.minParticipants = parseInt(event.target.value, 10) || this.globalMinParticipants; }
+  @action updateBackupStrategy(event) { this.backupStrategy = event.target.value; }
+  @action updateAdditionalNotes(event) { this.additionalNotes = event.target.value; }
 
   @action
   async handleImageUpload(event) {
@@ -184,22 +135,19 @@ export default class LotteryFormModal extends Component {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      this.showFlash("请选择图片文件", "error");
-      return;
+      return this.dialog.alert("请选择一个有效的图片文件。");
     }
 
-    if (file.size > 3 * 1024 * 1024) {
-      this.showFlash("图片文件大小不能超过 3MB", "error");
-      return;
+    if (file.size > (3 * 1024 * 1024)) {
+      return this.dialog.alert("图片文件大小不能超过 3MB。");
     }
 
     this.isImageUploading = true;
+    this.clearFlash();
 
     try {
       const reader = new FileReader();
-      reader.onload = (e) => {
-        this.prizeImagePreview = e.target.result;
-      };
+      reader.onload = (e) => { this.prizeImagePreview = e.target.result; };
       reader.readAsDataURL(file);
 
       const formData = new FormData();
@@ -215,12 +163,13 @@ export default class LotteryFormModal extends Component {
 
       if (response && response.url) {
         this.prizeImage = response.url;
-        this.showFlash("图片上传成功", "success");
+        this.showFlash("图片上传成功！", "success");
       } else {
-        throw new Error('上传响应格式错误');
+        throw new Error('服务器返回的上传数据格式不正确');
       }
     } catch (error) {
-      this.showFlash("图片上传失败，请重试", "error");
+      console.error("Image upload failed", error);
+      this.dialog.alert(`图片上传失败: ${error.message || '请检查网络或联系管理员'}`);
       this.prizeImagePreview = "";
     } finally {
       this.isImageUploading = false;
@@ -232,12 +181,10 @@ export default class LotteryFormModal extends Component {
     this.prizeImage = "";
     this.prizeImagePreview = "";
     const fileInput = document.getElementById('lottery-image-upload');
-    if (fileInput) {
-      fileInput.value = '';
-    }
+    if (fileInput) { fileInput.value = ''; }
   }
 
-  // 官方推荐：使用标准的数据传递方式
+  // 关键的提交方法
   @action
   async submit() {
     this.clearFlash();
@@ -252,7 +199,7 @@ export default class LotteryFormModal extends Component {
     this.isLoading = true;
 
     try {
-      // 构建抽奖数据
+      // 1. 构建抽奖数据对象
       const lotteryData = {
         prize_name: this.prizeName.trim(),
         prize_details: this.prizeDetails.trim(),
@@ -265,35 +212,36 @@ export default class LotteryFormModal extends Component {
         prize_image: this.prizeImage.trim()
       };
 
-      const composer = this.args.model?.composer;
+      // 2. 获取 Composer 模型
+      const composer = this.args.model.composer;
+      const model = composer.get("model");
       
-      if (composer && composer.get) {
-        const model = composer.get("model");
-        
-        // 官方推荐：使用 custom_fields 传递数据到 PostCreator
-        if (!model.custom_fields) {
-          model.set("custom_fields", {});
-        }
-        
-        // 设置数据到 custom_fields，这将被 add_permitted_post_create_param 处理
-        model.set("custom_fields.lottery", JSON.stringify(lotteryData));
-        model.notifyPropertyChange("custom_fields");
-        
-        // 构建显示内容
-        const placeholder = this.buildLotteryPlaceholder(lotteryData);
-        const currentText = model.get("reply") || "";
-        model.set("reply", currentText + placeholder);
+      const lotteryJSON = JSON.stringify(lotteryData);
 
-        this.showFlash("抽奖信息已插入编辑器", "success");
-        
-        setTimeout(() => {
-          this.args.closeModal();
-        }, 1500);
-      } else {
-        throw new Error("无法获取编辑器实例");
+      // 3. 关键步骤: 将数据设置到 composer model 的 'lottery' 属性上。
+      //    `api.serializeOnCreate('lottery')` 会在后台自动寻找这个属性并发送它。
+      model.set("lottery", lotteryJSON);
+
+      // 4. (可选但推荐) 同时保存到 custom_fields，这对于草稿功能和数据一致性有好处
+      if (!model.custom_fields) {
+        model.set("custom_fields", {});
       }
+      model.set("custom_fields.lottery", lotteryJSON);
+      
+      // 5. 在编辑器中插入占位符供用户查看
+      const placeholder = this.buildLotteryPlaceholder(lotteryData);
+      // 使用官方推荐的事件来插入文本，而不是直接修改 model.reply
+      this.appEvents.trigger("composer:insert-text", placeholder);
+      
+      this.showFlash("抽奖信息已成功插入！", "success");
+
+      setTimeout(() => {
+        this.args.closeModal();
+      }, 1000);
+
     } catch (error) {
-      this.showFlash("提交失败：" + error.message, "error");
+      console.error("Lottery submission failed:", error);
+      this.showFlash(`处理失败: ${error.message || '未知错误'}`, "error");
     } finally {
       this.isLoading = false;
     }
@@ -305,7 +253,7 @@ export default class LotteryFormModal extends Component {
     placeholder += `奖品说明：${lotteryData.prize_details}\n`;
     placeholder += `开奖时间：${lotteryData.draw_time}\n`;
     
-    if (lotteryData.specified_posts && lotteryData.specified_posts.trim()) {
+    if (lotteryData.specified_posts) {
       placeholder += `抽奖方式：指定楼层\n`;
       placeholder += `指定楼层：${lotteryData.specified_posts}\n`;
     } else {
@@ -315,11 +263,11 @@ export default class LotteryFormModal extends Component {
     
     placeholder += `参与门槛：${lotteryData.min_participants} 人\n`;
     
-    if (lotteryData.additional_notes && lotteryData.additional_notes.trim()) {
+    if (lotteryData.additional_notes) {
       placeholder += `补充说明：${lotteryData.additional_notes}\n`;
     }
     
-    if (lotteryData.prize_image && lotteryData.prize_image.trim()) {
+    if (lotteryData.prize_image) {
       placeholder += `奖品图片：${lotteryData.prize_image}\n`;
     }
     
