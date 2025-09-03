@@ -1,0 +1,86 @@
+plugins:
+  # 抽奖功能总开关
+  lottery_enabled:
+    default: true
+    client: true
+    description: "启用或禁用抽奖功能"
+
+  # 允许抽奖的分类
+  lottery_allowed_categories:
+    default: ""
+    type: category_list
+    client: true
+    description: "允许创建抽奖活动的分类列表。留空表示所有分类都允许"
+
+  # 全局最小参与人数
+  lottery_min_participants_global:
+    default: 5
+    type: integer
+    min: 1
+    max: 1000
+    client: true
+    description: "抽奖活动的最低参与门槛，所有抽奖都不能低于此数值"
+
+  # 帖子锁定延迟时间（后悔期）
+  lottery_post_lock_delay_minutes:
+    default: 30
+    type: integer
+    min: 0
+    max: 1440  # 最大24小时
+    client: false
+    description: "抽奖发布后多少分钟内可以编辑，超过时间将自动锁定。设置为0表示立即锁定"
+
+  # 排除的用户组
+  lottery_excluded_groups:
+    default: ""
+    type: group_list
+    client: false
+    description: "这些用户组的成员将被排除在所有抽奖活动之外"
+
+  # 单用户最大同时进行的抽奖数量
+  lottery_max_concurrent_per_user:
+    default: 3
+    type: integer
+    min: 1
+    max: 10
+    client: false
+    description: "单个用户同时可以进行的抽奖活动数量上限"
+
+  # 抽奖主题自动关闭
+  lottery_auto_close_topics:
+    default: true
+    client: false
+    description: "开奖完成后是否自动关闭抽奖主题"
+
+  # 抽奖图片上传限制
+  lottery_image_max_size_mb:
+    default: 3
+    type: integer
+    min: 1
+    max: 10
+    client: true
+    description: "抽奖图片的最大文件大小（MB）"
+
+  # 允许的图片格式
+  lottery_allowed_image_formats:
+    default: "jpg|jpeg|png|gif|webp"
+    client: true
+    description: "允许上传的图片格式，用|分隔"
+
+  # 指定楼层最大数量
+  lottery_max_specified_posts:
+    default: 20
+    type: integer
+    min: 1
+    max: 100
+    client: true
+    description: "指定楼层抽奖模式下允许指定的最大楼层数量"
+
+  # 随机抽奖最大获奖人数
+  lottery_max_random_winners:
+    default: 50
+    type: integer
+    min: 1
+    max: 100
+    client: true
+    description: "随机抽奖模式下允许的最大获奖人数"
