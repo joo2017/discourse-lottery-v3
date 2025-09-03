@@ -574,7 +574,3 @@ after_initialize do
   Rails.logger.info "LotteryPlugin: Job classes defined with reliability fixes"
   Rails.logger.info "LotteryPlugin: Initialization completed successfully with data reliability improvements"
 end
-
-# ====================================================================
-# 2. 修复 assets/javascripts/discourse/initializers/lottery-composer-integration.js
-# ====================================================================
