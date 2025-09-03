@@ -1,0 +1,11 @@
+en:
+  site_settings:
+    lottery_enabled: "Enable Lottery Plugin"
+    lottery_allowed_categories: "Allowed categories for lotteries"
+    lottery_allowed_categories_description: "The lottery form will only appear when creating a new topic in these categories."
+    lottery_min_participants_global: "Global minimum participants"
+    lottery_min_participants_global_description: "The minimum number of participants required for any lottery. Users cannot set a threshold lower than this."
+    lottery_post_lock_delay_minutes: "Post lock delay (minutes)"
+    lottery_post_lock_delay_minutes_description: "The time (in minutes) after which the first post of a lottery topic is locked. Set to 0 to lock immediately."
+    lottery_excluded_groups: "Excluded groups from participation"
+    lottery_excluded_groups_description: "Members of these groups will not be considered as valid participants in any lottery."
