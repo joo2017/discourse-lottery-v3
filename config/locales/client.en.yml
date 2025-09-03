@@ -1,0 +1,25 @@
+en:
+  lottery:
+    toolbar:
+      title: "Insert Lottery"
+    form:
+      prize_name:
+        label: "Activity Name"
+      prize_details:
+        label: "Prize Description"
+      draw_time:
+        label: "Draw Time"
+      winners_count:
+        label: "Number of Winners"
+        description: "This is for random draws. If you specify post numbers below, this will be ignored."
+      specified_posts:
+        label: "Specified Winning Post Numbers (Optional)"
+        description: "Fill this to override random draw. Use commas to separate, e.g., 8,18,28"
+      min_participants:
+        label: "Participation Threshold"
+        error: "Threshold cannot be less than the global minimum of %{count}."
+      backup_strategy:
+        label: "Backup Strategy"
+        options:
+          continue: "Continue draw if participants are insufficient"
+          cancel: "Cancel activity if participants are insufficient"
