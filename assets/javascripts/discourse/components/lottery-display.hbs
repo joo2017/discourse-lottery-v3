@@ -1,0 +1,61 @@
+{{! assets/javascripts/discourse/components/lottery-display.hbs }}
+<div class="lottery-display-card {{this.statusClass}}">
+  <div class="lottery-header">
+    <div class="lottery-title">
+      <span class="lottery-icon">🎲</span>
+      <h3>{{this.lotteryData.prize_name}}</h3>
+    </div>
+    <div class="lottery-status">
+      {{this.statusText}}
+    </div>
+  </div>
+
+  <div class="lottery-content">
+    {{#if this.lotteryData.prize_image}}
+      <div class="lottery-image">
+        <img src={{this.lotteryData.prize_image}} alt="奖品图片" />
+      </div>
+    {{/if}}
+
+    <div class="lottery-details">
+      <div class="lottery-detail-item">
+        <span class="label">🎁 奖品说明：</span>
+        <span class="value">{{this.lotteryData.prize_details}}</span>
+      </div>
+
+      <div class="lottery-detail-item">
+        <span class="label">⏰ 开奖时间：</span>
+        <span class="value">{{this.formattedDrawTime}}</span>
+      </div>
+
+      <div class="lottery-detail-item">
+        <span class="label">🎯 抽奖方式：</span>
+        <span class="value">
+          {{#if this.isSpecifiedType}}
+            指定楼层 ({{this.lotteryData.specified_posts}})
+          {{else}}
+            随机抽取 {{this.lotteryData.winners_count}} 人
+          {{/if}}
+        </span>
+      </div>
+
+      <div class="lottery-detail-item">
+        <span class="label">👥 参与门槛：</span>
+        <span class="value">至少 {{this.lotteryData.min_participants}} 人参与</span>
+      </div>
+
+      {{#if this.lotteryData.additional_notes}}
+        <div class="lottery-detail-item">
+          <span class="label">📝 补充说明：</span>
+          <span class="value">{{this.lotteryData.additional_notes}}</span>
+        </div>
+      {{/if}}
+    </div>
+  </div>
+
+  <div class="lottery-footer">
+    <div class="participation-tip">
+      💡 <strong>参与方式：</strong>在本话题下回复即可参与抽奖
+    </div>
+  </div>
+</div>
