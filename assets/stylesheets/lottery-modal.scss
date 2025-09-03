@@ -1,0 +1,71 @@
+// 图片上传相关样式 - 添加到 lottery-modal.scss 文件末尾
+
+.lottery-image-upload {
+  position: relative;
+  
+  .lottery-file-input {
+    display: none;
+  }
+  
+  .lottery-upload-btn {
+    display: inline-block;
+    padding: 10px 20px;
+    background: var(--tertiary);
+    color: var(--secondary);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+    border: none;
+    
+    &:hover {
+      background: var(--tertiary-hover);
+    }
+    
+    &:active {
+      transform: translateY(1px);
+    }
+  }
+  
+  .lottery-image-preview {
+    margin-top: 12px;
+    position: relative;
+    display: inline-block;
+    border: 2px solid var(--primary-low);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--secondary);
+    
+    img {
+      max-width: 200px;
+      max-height: 150px;
+      width: auto;
+      height: auto;
+      display: block;
+    }
+    
+    .remove-image-btn {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      width: 24px;
+      height: 24px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      line-height: 1;
+      transition: background-color 0.2s ease;
+      
+      &:hover {
+        background: rgba(220, 53, 69, 0.8);
+      }
+    }
+  }
+}
