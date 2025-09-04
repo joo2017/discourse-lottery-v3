@@ -1,533 +1,397 @@
-# ====================================================================
-# 1. 修复 plugin.rb - 核心数据传递逻辑
-# ====================================================================
-
 # name: discourse-lottery-v3
-# about: A comprehensive and robust lottery plugin for Discourse, following official 2025 best practices
-# version: 0.2.0
+# about: A comprehensive lottery plugin following Discourse 2025 best practices
+# version: 0.3.0
 # authors: [Your Name]
-# url: [Your GitHub Repo URL]
+# url: https://github.com/joo2017/discourse-lottery-v3
+# required_version: 3.1.0
 
 enabled_site_setting :lottery_enabled
 
 register_asset "stylesheets/lottery-modal.scss"
-register_asset "stylesheets/lottery-form.scss" 
+register_asset "stylesheets/lottery-form.scss"
 register_asset "stylesheets/lottery-display.scss"
 
 register_svg_icon "dice"
 
 after_initialize do
-  Rails.logger.info "LotteryPlugin: Starting initialization with data reliability fixes"
+  Rails.logger.info "🎲 LotteryPlugin: Starting initialization with 2025 standards"
 
-  # ===================================================================
-  # 官方推荐：使用正确的自定义字段注册方式
+  # =================================================================== 
+  # 修复1: 正确的自定义字段注册（基于discourse-calendar模式）
   # ===================================================================
   
-  register_topic_custom_field_type('lottery', :json)
+  # 注册自定义字段类型 - 使用最新API
+  register_topic_custom_field_type('lottery_data', :json)
   register_post_custom_field_type('lottery_data', :json)
   
-  # 官方推荐：允许参数传递 - 但不完全依赖
+  # 修复：添加到白名单以便前端访问
+  add_preloaded_topic_list_custom_field('lottery_data')
+  
+  # 修复：允许在创建时传递参数
   add_permitted_post_create_param('lottery')
-  
-  # 官方推荐：为列表显示预加载自定义字段
-  add_preloaded_topic_list_custom_field('lottery')
+  add_permitted_topic_create_param('lottery_data')
 
-  Rails.logger.info "LotteryPlugin: Custom fields registered using official methods"
+  Rails.logger.info "🎲 LotteryPlugin: Custom fields registered correctly"
 
   # ===================================================================
-  # 模型扩展 - 使用官方推荐的 add_to_class 方法
+  # 修复2: 模型加载和关联（修复路径问题）
   # ===================================================================
   
+  # 修复：使用相对路径加载模型
+  [
+    "#{Rails.root}/plugins/discourse-lottery-v3/lib/lottery.rb",
+    "#{Rails.root}/plugins/discourse-lottery-v3/lib/lottery_creator.rb", 
+    "#{Rails.root}/plugins/discourse-lottery-v3/lib/lottery_manager.rb"
+  ].each do |file_path|
+    if File.exist?(file_path)
+      load file_path
+      Rails.logger.debug "🎲 Loaded: #{file_path}"
+    else
+      Rails.logger.warn "🎲 File not found: #{file_path}"
+    end
+  end
+  
+  Rails.logger.info "🎲 LotteryPlugin: Models loaded"
+
+  # ===================================================================
+  # 修复3: 模型扩展（使用官方推荐方式）
+  # ===================================================================
+  
+  # Topic扩展
   add_to_class(:topic, :lottery_data) do
-    @lottery_data ||= custom_fields['lottery'].present? ? JSON.parse(custom_fields['lottery']) : nil
-  rescue JSON::ParserError
-    nil
+    @lottery_data ||= begin
+      data = custom_fields['lottery_data']
+      data.present? ? (data.is_a?(String) ? JSON.parse(data) : data) : nil
+    rescue JSON::ParserError => e
+      Rails.logger.warn "🎲 Error parsing lottery_data: #{e.message}"
+      nil
+    end
   end
   
   add_to_class(:topic, "lottery_data=") do |value|
     if value.nil?
-      custom_fields['lottery'] = nil
+      custom_fields.delete('lottery_data')
     else
-      custom_fields['lottery'] = value.is_a?(String) ? value : value.to_json
+      custom_fields['lottery_data'] = value.is_a?(String) ? value : value.to_json
     end
-  end
-
-  # ===================================================================
-  # 扩展序列化器 - 官方标准方式
-  # ===================================================================
-  
-  add_to_serializer(:post, :lottery_data, include_condition: -> {
-    object.post_number == 1 && object.topic&.lotteries&.exists?
-  }) do
-    lottery = object.topic.lotteries.first
-    return nil unless lottery
-
-    {
-      id: lottery.id,
-      prize_name: lottery.prize_name,
-      prize_details: lottery.prize_details,
-      draw_time: lottery.draw_time&.iso8601,
-      winners_count: lottery.winners_count,
-      min_participants: lottery.min_participants,
-      backup_strategy: lottery.backup_strategy,
-      lottery_type: lottery.lottery_type,
-      specified_posts: lottery.specified_post_numbers,
-      status: lottery.status,
-      additional_notes: lottery.additional_notes,
-      prize_image: lottery.prize_image
-    }
+    @lottery_data = nil # 清除缓存
   end
   
-  add_to_serializer(:topic_view, :lottery_data, include_condition: -> {
-    object.topic&.lotteries&.exists?
-  }) do
-    lottery = object.topic.lotteries.first
-    return nil unless lottery
-
-    {
-      id: lottery.id,
-      prize_name: lottery.prize_name,
-      prize_details: lottery.prize_details,
-      draw_time: lottery.draw_time&.iso8601,
-      winners_count: lottery.winners_count,
-      min_participants: lottery.min_participants,
-      backup_strategy: lottery.backup_strategy,
-      lottery_type: lottery.lottery_type,
-      specified_posts: lottery.specified_post_numbers,
-      status: lottery.status,
-      additional_notes: lottery.additional_notes,
-      prize_image: lottery.prize_image
-    }
+  add_to_class(:topic, :has_lottery?) do
+    lottery_data.present? || (defined?(lotteries) && lotteries.exists?)
   end
   
-  Rails.logger.info "LotteryPlugin: Serializers extended"
-
-  # ===================================================================
-  # 使用 Rails 自动加载加载模型和服务
-  # ===================================================================
-  
-  begin
-    require_relative 'lib/lottery'
-    require_relative 'lib/lottery_creator'
-    require_relative 'lib/lottery_manager'
-    Rails.logger.info "LotteryPlugin: Loaded models and services"
-  rescue => e
-    Rails.logger.error "LotteryPlugin: Failed to load models: #{e.message}"
-  end
-  
-  # ===================================================================
-  # 模型关联和扩展
-  # ===================================================================
-  
-  module LotteryTopicExtension
-    def has_lottery?
-      lotteries.exists?
-    end
-    
-    def active_lottery
-      lotteries.where(status: 'running').first
-    end
-  end
-  
-  module LotteryPostExtension
-    def is_lottery_post?
-      post_number == 1 && topic&.has_lottery?
-    end
-  end
-  
-  module LotteryUserExtension
-    def created_lotteries
-      lotteries.order(created_at: :desc)
-    end
-  end
-  
-  ::Topic.class_eval do
+  # 修复：建立正确的关联
+  Topic.class_eval do
     has_many :lotteries, dependent: :destroy
-    prepend LotteryTopicExtension
   end
 
-  ::Post.class_eval do
+  Post.class_eval do
     has_many :lotteries, dependent: :destroy
-    prepend LotteryPostExtension
   end
 
-  ::User.class_eval do
+  User.class_eval do
     has_many :lotteries, foreign_key: :user_id, dependent: :destroy
-    prepend LotteryUserExtension
-  end
-  
-  Rails.logger.info "LotteryPlugin: Model associations and extensions added"
-
-  # ===================================================================
-  # 关键修复：数据传递可靠性保障机制
-  # ===================================================================
-  
-  # 核心函数：多源数据提取（学习poll插件模式）
-  def self.extract_lottery_data_reliably(topic, opts, user)
-    Rails.logger.info "LotteryPlugin: Extracting lottery data from multiple sources"
-    
-    lottery_data = nil
-    source_info = "unknown"
-    
-    # 数据源优先级（按可靠性排序）
-    
-    # 方法1：从帖子内容解析（最可靠 - poll插件主要方式）
-    if topic&.first_post&.raw.present?
-      raw_content = topic.first_post.raw
-      if raw_content.include?('[lottery]') && raw_content.include?('[/lottery]')
-        lottery_match = raw_content.match(/\[lottery\](.*?)\[\/lottery\]/m)
-        if lottery_match
-          lottery_data = parse_lottery_content_to_json(lottery_match[1])
-          source_info = "raw_content" if lottery_data
-          Rails.logger.info "LotteryPlugin: Found lottery data in raw content"
-        end
-      end
-    end
-    
-    # 方法2：从opts参数获取（次可靠 - 辅助方式）
-    if lottery_data.blank? && opts.present?
-      if opts[:lottery].present?
-        lottery_data = opts[:lottery]
-        source_info = "opts_lottery"
-        Rails.logger.info "LotteryPlugin: Found lottery data in opts[:lottery]"
-      elsif opts[:custom_fields].present? && opts[:custom_fields]['lottery'].present?
-        lottery_data = opts[:custom_fields]['lottery']
-        source_info = "opts_custom_fields"
-        Rails.logger.info "LotteryPlugin: Found lottery data in opts[:custom_fields]"
-      end
-    end
-    
-    # 方法3：从topic custom_fields获取（兜底方式）
-    if lottery_data.blank? && topic.present?
-      topic.reload
-      if topic.custom_fields['lottery'].present?
-        lottery_data = topic.custom_fields['lottery']
-        source_info = "topic_custom_fields"
-        Rails.logger.info "LotteryPlugin: Found lottery data in topic custom_fields"
-      end
-    end
-    
-    Rails.logger.info "LotteryPlugin: Data extraction result - Source: #{source_info}, Data present: #{lottery_data.present?}"
-    
-    return lottery_data, source_info
   end
 
-  # 内容解析函数（poll插件模式）
-  def self.parse_lottery_content_to_json(content)
-    begin
-      data = {}
-      lines = content.to_s.split("\n")
-      
-      lines.each do |line|
-        line = line.strip
-        next unless line.present? && line.include?('：')
-        
-        key, value = line.split('：', 2)
-        key = key.strip
-        value = value.strip if value
-        
-        case key
-        when '活动名称'
-          data['prize_name'] = value
-        when '奖品说明'
-          data['prize_details'] = value
-        when '开奖时间'
-          data['draw_time'] = value
-        when '获奖人数'
-          data['winners_count'] = value.to_i if value
-        when '指定楼层'
-          data['specified_posts'] = value if value.present?
-        when '参与门槛'
-          match = value.match(/\d+/) if value
-          data['min_participants'] = match[0].to_i if match
-        when '后备策略'
-          if value&.include?('取消')
-            data['backup_strategy'] = 'cancel'
-          else
-            data['backup_strategy'] = 'continue'
-          end
-        when '补充说明'
-          data['additional_notes'] = value if value.present?
-        when '奖品图片'
-          data['prize_image'] = value if value.present?
-        end
-      end
-      
-      # 设置默认值
-      data['backup_strategy'] = 'continue' unless data['backup_strategy']
-      
-      Rails.logger.debug "LotteryPlugin: Parsed lottery data: #{data}"
-      data
-    rescue => e
-      Rails.logger.error "LotteryPlugin: Error parsing lottery content: #{e.message}"
-      nil
+  Rails.logger.info "🎲 LotteryPlugin: Model associations established"
+
+  # ===================================================================
+  # 修复4: 序列化器优化（基于discourse-calendar最佳实践）
+  # ===================================================================
+  
+  # 修复：Post序列化器 - 只在第一个帖子且有抽奖数据时显示
+  add_to_serializer(:post, :lottery_data, include_condition: -> {
+    object.post_number == 1 && object.topic&.has_lottery?
+  }) do
+    # 优先从数据库获取最新数据
+    if object.topic.respond_to?(:lotteries) && object.topic.lotteries.exists?
+      lottery = object.topic.lotteries.first
+      {
+        id: lottery.id,
+        prize_name: lottery.prize_name,
+        prize_details: lottery.prize_details,
+        draw_time: lottery.draw_time&.iso8601,
+        winners_count: lottery.winners_count,
+        min_participants: lottery.min_participants,
+        backup_strategy: lottery.backup_strategy,
+        lottery_type: lottery.lottery_type,
+        specified_posts: lottery.specified_post_numbers,
+        status: lottery.status,
+        additional_notes: lottery.additional_notes,
+        prize_image: lottery.prize_image,
+        participants_count: lottery.participants_count,
+        can_edit: lottery.in_regret_period?
+      }
+    else
+      # 备用：从custom_fields获取
+      object.topic.lottery_data
+    end
+  end
+  
+  # 修复：TopicView序列化器
+  add_to_serializer(:topic_view, :lottery_data, include_condition: -> {
+    object.topic&.has_lottery?
+  }) do
+    if object.topic.respond_to?(:lotteries) && object.topic.lotteries.exists?
+      lottery = object.topic.lotteries.first
+      {
+        id: lottery.id,
+        prize_name: lottery.prize_name,
+        prize_details: lottery.prize_details,
+        draw_time: lottery.draw_time&.iso8601,
+        winners_count: lottery.winners_count,
+        min_participants: lottery.min_participants,
+        backup_strategy: lottery.backup_strategy,
+        lottery_type: lottery.lottery_type,
+        specified_posts: lottery.specified_post_numbers,
+        status: lottery.status,
+        additional_notes: lottery.additional_notes,
+        prize_image: lottery.prize_image,
+        participants_count: lottery.participants_count,
+        winner_users: lottery.finished? ? lottery.winner_users.map { |u| { id: u.id, username: u.username } } : []
+      }
+    else
+      object.topic.lottery_data
     end
   end
 
+  Rails.logger.info "🎲 LotteryPlugin: Serializers configured"
+
   # ===================================================================
-  # 修复版事件处理：学习poll插件的可靠性模式
+  # 修复5: 事件处理（修复数据传递问题）
   # ===================================================================
   
-  # 主要事件：处理主题创建（关键修复）
+  # 修复：主题创建事件处理
   DiscourseEvent.on(:topic_created) do |topic, opts, user|
     next unless SiteSetting.lottery_enabled
     
-    Rails.logger.info "LotteryPlugin: Topic created event for #{topic.id}"
+    Rails.logger.info "🎲 Topic created: #{topic.id}, checking for lottery data"
     
-    # 使用多源可靠性提取
-    lottery_data, source_info = extract_lottery_data_reliably(topic, opts, user)
+    # 修复：多渠道获取抽奖数据
+    lottery_data = extract_lottery_data(topic, opts)
     
     if lottery_data.present?
-      Rails.logger.info "LotteryPlugin: Processing lottery creation with data from #{source_info}"
+      Rails.logger.info "🎲 Processing lottery for topic #{topic.id}"
       
-      # 关键修复：使用延迟任务处理，传递稳定的标识而不是复杂数据
+      # 立即处理，避免延迟问题
       Jobs.enqueue(:process_lottery_creation, {
         topic_id: topic.id,
-        post_id: topic.first_post.id,
-        user_id: user.id,
-        source: source_info,
-        # 不传递复杂的lottery_data，而是让任务重新提取
-        raw_content: topic.first_post.raw
+        post_id: topic.first_post&.id,
+        lottery_data: lottery_data.is_a?(String) ? lottery_data : lottery_data.to_json,
+        user_id: user.id
       })
-      
-      # 立即设置临时标记（避免重复处理）
-      topic.custom_fields['lottery_processing'] = true
-      topic.save_custom_fields(true)
-      
-    else
-      Rails.logger.debug "LotteryPlugin: No lottery data found in topic creation"
     end
   end
 
-  # 处理帖子编辑
-  DiscourseEvent.on(:post_edited) do |post, topic_changed|
+  # 修复：帖子编辑事件（增加安全检查）
+  DiscourseEvent.on(:post_edited) do |post, topic_changed, user|
     next unless SiteSetting.lottery_enabled
     next unless post.post_number == 1
+    next unless post.topic&.has_lottery?
     
-    lottery = post.topic&.active_lottery
-    next unless lottery
-    
-    # 检查是否在允许编辑期内
-    lock_delay = SiteSetting.lottery_post_lock_delay_minutes.minutes
-    if lottery.created_at + lock_delay > Time.current
-      Rails.logger.info "LotteryPlugin: Post edited within grace period, updating lottery"
-      
-      # 使用可靠的数据提取
-      lottery_data, source_info = extract_lottery_data_reliably(post.topic, {}, lottery.user)
-      
-      if lottery_data.present?
-        Jobs.enqueue(:update_lottery_from_edit, {
-          lottery_id: lottery.id,
-          post_id: post.id,
-          raw_content: post.raw,
-          source: source_info
-        })
+    begin
+      # 检查是否有活跃的抽奖且在编辑期内
+      if post.topic.lotteries.exists?
+        lottery = post.topic.lotteries.running.first
+        
+        if lottery && lottery.in_regret_period?
+          Rails.logger.info "🎲 Updating lottery #{lottery.id} from post edit"
+          
+          # 从帖子内容重新解析数据
+          content_data = extract_lottery_from_content(post.raw)
+          
+          if content_data.present?
+            Jobs.enqueue(:update_lottery_from_edit, {
+              lottery_id: lottery.id,
+              post_id: post.id,
+              lottery_data: content_data.to_json
+            })
+          end
+        end
       end
+    rescue => e
+      Rails.logger.error "🎲 Error in post_edited handler: #{e.message}"
     end
   end
 
-  Rails.logger.info "LotteryPlugin: Event handlers registered with reliability fixes"
+  Rails.logger.info "🎲 LotteryPlugin: Event handlers registered"
 
   # ===================================================================
-  # 修复版后台任务：数据处理可靠性保障
+  # 修复6: 改进的数据提取方法
+  # ===================================================================
+  
+  def self.extract_lottery_data(topic, opts)
+    # 方法1：从opts直接获取
+    return opts[:lottery] if opts&.dig(:lottery).present?
+    return opts[:lottery_data] if opts&.dig(:lottery_data).present?
+    
+    # 方法2：从custom_fields获取  
+    if opts&.dig(:custom_fields, 'lottery').present?
+      return opts[:custom_fields]['lottery']
+    end
+    
+    if opts&.dig(:custom_fields, 'lottery_data').present?
+      return opts[:custom_fields]['lottery_data']
+    end
+    
+    # 方法3：从topic的custom_fields获取
+    if topic.custom_fields['lottery_data'].present?
+      return topic.custom_fields['lottery_data']
+    end
+    
+    # 方法4：从帖子内容解析
+    first_post = topic.first_post || topic.ordered_posts.first
+    return extract_lottery_from_content(first_post.raw) if first_post&.raw.present?
+    
+    nil
+  end
+  
+  def self.extract_lottery_from_content(content)
+    return nil unless content.present?
+    
+    match = content.match(/\[lottery\](.*?)\[\/lottery\]/m)
+    return nil unless match
+    
+    parse_lottery_content(match[1])
+  end
+  
+  def self.parse_lottery_content(content)
+    data = {}
+    content.split("\n").each do |line|
+      line = line.strip
+      next unless line.include?('：')
+      
+      key, value = line.split('：', 2)
+      key, value = key.strip, value&.strip
+      
+      case key
+      when '活动名称' then data['prize_name'] = value
+      when '奖品说明' then data['prize_details'] = value  
+      when '开奖时间' then data['draw_time'] = value
+      when '获奖人数' then data['winners_count'] = value.to_i
+      when '指定楼层', '指定中奖楼层' then data['specified_posts'] = value if value.present?
+      when '参与门槛' 
+        match = value&.match(/\d+/)
+        data['min_participants'] = match[0].to_i if match
+      when '补充说明' then data['additional_notes'] = value if value.present?
+      when '奖品图片' then data['prize_image'] = value if value.present?
+      end
+    end
+    
+    data['backup_strategy'] = 'continue' # 默认值
+    data.present? ? data : nil
+  end
+
+  # ===================================================================
+  # 修复7: 后台任务优化
   # ===================================================================
   
   module ::Jobs
+    # 修复：抽奖创建任务
     class ProcessLotteryCreation < ::Jobs::Base
       def execute(args)
-        topic_id = args[:topic_id]
-        post_id = args[:post_id]
-        user_id = args[:user_id]
-        source = args[:source]
-        raw_content = args[:raw_content]
+        topic_id, post_id, user_id = args.values_at(:topic_id, :post_id, :user_id)
+        lottery_data = args[:lottery_data]
         
-        Rails.logger.info "ProcessLotteryCreation: Starting for topic #{topic_id} from source #{source}"
+        Rails.logger.info "🎲 ProcessLotteryCreation: Processing topic #{topic_id}"
         
         begin
           topic = Topic.find(topic_id)
-          post = Post.find(post_id)
           user = User.find(user_id)
           
-          # 清除临时处理标记
-          topic.custom_fields.delete('lottery_processing')
-          topic.save_custom_fields(true)
+          # 解析数据
+          parsed_data = parse_lottery_data(lottery_data)
+          raise "无法解析抽奖数据" unless parsed_data.present?
           
-          # 关键修复：在任务中重新可靠提取数据
-          lottery_data, actual_source = ::DiscoursePlugins::DiscourseAbTest.extract_lottery_data_reliably(topic, {}, user)
-          
-          unless lottery_data
-            Rails.logger.error "ProcessLotteryCreation: Failed to extract lottery data in job"
-            post_error_message(topic_id, "无法解析抽奖数据，请检查格式是否正确")
-            return
-          end
-          
-          Rails.logger.debug "ProcessLotteryCreation: Using data from #{actual_source}: #{lottery_data.inspect}"
-          
-          # 解析并验证数据
-          parsed_data = normalize_lottery_data(lottery_data)
-          validate_required_fields!(parsed_data)
-          
-          # 创建抽奖记录
+          # 创建抽奖
           lottery = LotteryCreator.new(topic, parsed_data, user).create
           
-          # 调度相关任务
-          schedule_lottery_tasks(lottery)
+          # 调度任务
+          schedule_tasks(lottery)
           
           # 通知前端
           MessageBus.publish("/topic/#{topic.id}", {
             type: "lottery_created",
-            lottery_id: lottery.id
+            lottery_id: lottery.id,
+            topic_id: topic.id
           })
           
-          Rails.logger.info "ProcessLotteryCreation: Successfully created lottery #{lottery.id}"
+          Rails.logger.info "🎲 ProcessLotteryCreation: Success for lottery #{lottery.id}"
           
         rescue => e
-          Rails.logger.error "ProcessLotteryCreation: Error: #{e.message}"
-          Rails.logger.error "ProcessLotteryCreation: Backtrace: #{e.backtrace.join("\n")}"
-          post_error_message(topic_id, e.message)
+          Rails.logger.error "🎲 ProcessLotteryCreation: #{e.message}"
+          post_error_to_topic(topic_id, e.message)
         end
       end
 
       private
 
-      def normalize_lottery_data(lottery_data)
-        case lottery_data
+      def parse_lottery_data(data)
+        case data
         when String
           begin
-            JSON.parse(lottery_data).with_indifferent_access
+            JSON.parse(data).with_indifferent_access
           rescue JSON::ParserError
-            # 如果不是JSON，当作raw content处理
-            ::DiscoursePlugins::DiscourseAbTest.parse_lottery_content_to_json(lottery_data)&.with_indifferent_access
+            Rails.logger.warn "🎲 Invalid JSON, treating as raw content"
+            nil
           end
         when Hash
-          lottery_data.with_indifferent_access
+          data.with_indifferent_access
         else
-          Rails.logger.error "ProcessLotteryCreation: Unknown lottery_data type: #{lottery_data.class}"
           nil
         end
       end
-      
-      def validate_required_fields!(data)
-        return unless data
-        
-        missing_fields = []
-        
-        missing_fields << '活动名称' if data[:prize_name].blank?
-        missing_fields << '奖品说明' if data[:prize_details].blank?
-        missing_fields << '开奖时间' if data[:draw_time].blank?
-        
-        if missing_fields.any?
-          raise "缺少必填字段：#{missing_fields.join('、')}"
-        end
-        
-        # 验证时间格式
-        begin
-          draw_time = DateTime.parse(data[:draw_time].to_s)
-          if draw_time <= Time.current
-            raise "开奖时间必须是未来时间"
-          end
-        rescue ArgumentError
-          raise "开奖时间格式无效"
-        end
-        
-        # 验证参与门槛
-        min_participants = data[:min_participants].to_i
-        global_min = SiteSetting.lottery_min_participants_global
-        
-        if min_participants < global_min
-          raise "参与门槛不能低于全局设置的 #{global_min} 人"
-        end
-      end
 
-      def schedule_lottery_tasks(lottery)
-        # 调度开奖任务
+      def schedule_tasks(lottery)
+        # 开奖任务
         Jobs.enqueue_at(lottery.draw_time, :execute_lottery_draw, lottery_id: lottery.id)
         
-        # 调度锁定任务（如果需要）
+        # 锁定任务
         lock_delay = SiteSetting.lottery_post_lock_delay_minutes
         if lock_delay > 0
           lock_time = lottery.created_at + lock_delay.minutes
           Jobs.enqueue_at(lock_time, :lock_lottery_post, lottery_id: lottery.id)
         end
-        
-        Rails.logger.info "ProcessLotteryCreation: Scheduled background tasks"
       end
 
-      def post_error_message(topic_id, error_message)
-        begin
-          PostCreator.create!(
-            Discourse.system_user,
-            topic_id: topic_id,
-            raw: "🚫 **抽奖创建失败**\n\n#{error_message}\n\n请检查抽奖信息并重新创建。"
-          )
-        rescue => e
-          Rails.logger.error "ProcessLotteryCreation: Failed to post error message: #{e.message}"
-        end
+      def post_error_to_topic(topic_id, message)
+        PostCreator.create!(
+          Discourse.system_user,
+          topic_id: topic_id,
+          raw: "🚫 **抽奖创建失败**\n\n#{message}\n\n请检查抽奖信息格式并重新创建。"
+        )
+      rescue => e
+        Rails.logger.error "🎲 Failed to post error: #{e.message}"
       end
     end
 
-    class UpdateLotteryFromEdit < ::Jobs::Base
-      def execute(args)
-        lottery_id = args[:lottery_id]
-        post_id = args[:post_id]
-        raw_content = args[:raw_content]
-        source = args[:source]
-        
-        Rails.logger.info "UpdateLotteryFromEdit: Processing lottery #{lottery_id} from #{source}"
-        
-        begin
-          lottery = Lottery.find(lottery_id)
-          post = Post.find(post_id)
-          
-          # 重新从内容中提取数据
-          lottery_data = nil
-          if raw_content.include?('[lottery]')
-            lottery_match = raw_content.match(/\[lottery\](.*?)\[\/lottery\]/m)
-            if lottery_match
-              lottery_data = ::DiscoursePlugins::DiscourseAbTest.parse_lottery_content_to_json(lottery_match[1])
-            end
-          end
-          
-          if lottery_data.present?
-            parsed_data = lottery_data.with_indifferent_access
-            LotteryCreator.new(lottery.topic, parsed_data, lottery.user).update_existing(lottery)
-            
-            MessageBus.publish("/topic/#{lottery.topic_id}", {
-              type: "lottery_updated",
-              lottery_id: lottery.id
-            })
-            
-            Rails.logger.info "UpdateLotteryFromEdit: Successfully updated lottery #{lottery_id}"
-          else
-            Rails.logger.warn "UpdateLotteryFromEdit: No lottery data found in edited content"
-          end
-          
-        rescue => e
-          Rails.logger.error "UpdateLotteryFromEdit: Error: #{e.message}"
-        end
-      end
-    end
-
-    # 其他任务保持不变...
+    # 修复：开奖执行任务
     class ExecuteLotteryDraw < ::Jobs::Base
       def execute(args)
         lottery_id = args[:lottery_id]
         
         begin
           lottery = Lottery.find(lottery_id)
-          Rails.logger.info "ExecuteLotteryDraw: Starting draw for lottery #{lottery_id}"
+          Rails.logger.info "🎲 ExecuteLotteryDraw: Starting for #{lottery_id}"
+          
+          return unless lottery.can_draw?
           
           manager = LotteryManager.new(lottery)
           result = manager.execute_draw
           
+          # 通知前端
           MessageBus.publish("/topic/#{lottery.topic_id}", {
-            type: "lottery_completed",
+            type: result[:cancelled] ? "lottery_cancelled" : "lottery_completed",
             lottery_id: lottery.id,
+            topic_id: lottery.topic_id,
             status: lottery.status
           })
           
+        rescue ActiveRecord::RecordNotFound
+          Rails.logger.warn "🎲 ExecuteLotteryDraw: Lottery #{lottery_id} not found"
         rescue => e
-          Rails.logger.error "ExecuteLotteryDraw: Error: #{e.message}"
+          Rails.logger.error "🎲 ExecuteLotteryDraw: #{e.message}"
           handle_draw_error(lottery_id, e)
         end
       end
@@ -535,42 +399,66 @@ after_initialize do
       private
 
       def handle_draw_error(lottery_id, error)
-        lottery = Lottery.find_by(id: lottery_id)
-        return unless lottery
-        
-        lottery.update!(status: 'cancelled')
-        
-        PostCreator.create!(
-          Discourse.system_user,
-          topic_id: lottery.topic_id,
-          raw: "❌ **开奖失败**\n\n系统在执行开奖时遇到错误。请联系管理员处理。"
-        )
+        begin
+          lottery = Lottery.find(lottery_id)
+          lottery.update!(status: 'cancelled')
+          
+          PostCreator.create!(
+            Discourse.system_user,
+            topic_id: lottery.topic_id,
+            raw: "❌ **开奖执行失败**\n\n系统错误：#{error.message}\n\n请联系管理员处理。"
+          )
+        rescue => e
+          Rails.logger.error "🎲 Failed to handle draw error: #{e.message}"
+        end
       end
     end
 
+    # 修复：帖子锁定任务
     class LockLotteryPost < ::Jobs::Base
       def execute(args)
         lottery_id = args[:lottery_id]
         
         begin
           lottery = Lottery.find(lottery_id)
-          post = lottery.post
+          return unless lottery.running? # 只锁定进行中的抽奖
           
+          post = lottery.post
           post.update!(locked_by_id: Discourse.system_user.id)
           
-          PostCreator.create!(
-            Discourse.system_user,
-            topic_id: lottery.topic_id,
-            raw: "🔒 抽奖信息已锁定，不允许再次编辑。"
-          )
+          Rails.logger.info "🎲 LockLotteryPost: Locked post for lottery #{lottery_id}"
           
         rescue => e
-          Rails.logger.error "LockLotteryPost: Error: #{e.message}"
+          Rails.logger.error "🎲 LockLotteryPost: #{e.message}"
+        end
+      end
+    end
+
+    # 修复：编辑更新任务
+    class UpdateLotteryFromEdit < ::Jobs::Base
+      def execute(args)
+        lottery_id, lottery_data = args.values_at(:lottery_id, :lottery_data)
+        
+        begin
+          lottery = Lottery.find(lottery_id)
+          return unless lottery.in_regret_period?
+          
+          parsed_data = JSON.parse(lottery_data).with_indifferent_access
+          LotteryCreator.new(lottery.topic, parsed_data, lottery.user).update_existing(lottery)
+          
+          MessageBus.publish("/topic/#{lottery.topic_id}", {
+            type: "lottery_updated",
+            lottery_id: lottery.id,
+            topic_id: lottery.topic_id
+          })
+          
+        rescue => e
+          Rails.logger.error "🎲 UpdateLotteryFromEdit: #{e.message}"
         end
       end
     end
   end
 
-  Rails.logger.info "LotteryPlugin: Job classes defined with reliability fixes"
-  Rails.logger.info "LotteryPlugin: Initialization completed successfully with data reliability improvements"
+  Rails.logger.info "🎲 LotteryPlugin: Jobs configured"
+  Rails.logger.info "🎲 LotteryPlugin: Initialization complete using 2025 standards"
 end
