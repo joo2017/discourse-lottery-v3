@@ -1,5 +1,5 @@
 // assets/javascripts/discourse/initializers/lottery-composer-integration.js
-// 基于discourse-calendar实际工作方式的修复版本
+// 实用版本 - 直接为抽奖插件设计
 
 import { withPluginApi } from "discourse/lib/plugin-api";
 
@@ -7,12 +7,11 @@ export default {
   name: "lottery-composer-integration",
   initialize() {
     withPluginApi("1.4.0", (api) => {
-      console.log("🎲 Lottery: Initializing toolbar integration");
+      console.log("🎲 Lottery: 初始化实用工具栏");
 
       const siteSettings = api.container.lookup("service:site-settings");
       
       if (!siteSettings.lottery_enabled) {
-        console.log("🎲 Lottery disabled");
         return;
       }
 
@@ -24,177 +23,314 @@ export default {
         const allowedCategories = siteSettings.lottery_allowed_categories;
         if (!allowedCategories) return true;
 
-        const allowedIds = allowedCategories
-          .split("|")
-          .map(id => Number(id.trim()))
-          .filter(id => !isNaN(id) && id > 0);
-
+        const allowedIds = allowedCategories.split("|").map(id => Number(id.trim())).filter(id => !isNaN(id) && id > 0);
         const currentCategoryId = Number(composer.get("model.categoryId") || 0);
         return allowedIds.length === 0 || allowedIds.includes(currentCategoryId);
       }
 
-      // 修复1: 使用正确的工具栏API
+      // 添加工具栏按钮
       api.onToolbarCreate((toolbar) => {
-        console.log("🎲 Adding toolbar button");
-        
         toolbar.addButton({
           title: "插入抽奖",
           id: "insertLottery", 
           group: "extras",
           icon: "dice",
           perform: (e) => {
-            console.log("🎲 Toolbar button clicked");
+            console.log("🎲 工具栏按钮点击");
             
             if (!siteSettings.lottery_enabled) {
-              showCenteredAlert("抽奖功能已被管理员关闭");
+              showAlert("抽奖功能已被管理员关闭");
               return;
             }
 
             if (!canInsertLottery()) {
-              showCenteredAlert("当前分类不支持抽奖功能");
+              showAlert("当前分类不支持抽奖功能");
               return;
             }
 
-            // 修复2: 直接插入模板到编辑器
-            insertLotteryTemplate(e);
+            // 显示抽奖表单
+            showLotteryForm(e);
           }
         });
       });
 
-      // 修复3: 使用居中显示的提示框
-      function showCenteredAlert(message) {
-        // 尝试使用Discourse的dialog服务
-        try {
-          const dialog = api.container.lookup("service:dialog");
-          if (dialog && dialog.alert) {
-            dialog.alert(message);
-            return;
-          }
-        } catch (e) {
-          console.log("🎲 Dialog service not available, using custom modal");
-        }
-
-        // 备用方案：创建自定义居中模态框
-        createCenteredModal(message);
-      }
-
-      function createCenteredModal(message) {
-        // 移除现有模态框
-        const existingModal = document.querySelector('.lottery-alert-modal');
-        if (existingModal) {
-          existingModal.remove();
-        }
-
-        // 创建模态框
+      // 简单的提示框
+      function showAlert(message) {
         const modal = document.createElement('div');
-        modal.className = 'lottery-alert-modal';
-        modal.innerHTML = `
-          <div class="lottery-modal-overlay">
-            <div class="lottery-modal-content">
-              <div class="lottery-modal-message">${message}</div>
-              <button class="lottery-modal-ok btn btn-primary">确定</button>
-            </div>
-          </div>
+        modal.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          background: rgba(0,0,0,0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 9999;
         `;
-
-        // 添加样式
-        const style = document.createElement('style');
-        style.textContent = `
-          .lottery-alert-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            z-index: 9999;
-          }
-          .lottery-modal-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-          .lottery-modal-content {
+        
+        modal.innerHTML = `
+          <div style="
             background: var(--secondary);
             color: var(--primary);
             padding: 30px;
             border-radius: 8px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
             text-align: center;
             max-width: 400px;
             margin: 20px;
-          }
-          .lottery-modal-message {
-            margin-bottom: 20px;
-            font-size: 16px;
-            line-height: 1.5;
-          }
-          .lottery-modal-ok {
-            min-width: 80px;
-          }
+          ">
+            <div style="margin-bottom: 20px; font-size: 16px;">${message}</div>
+            <button onclick="this.closest('div').remove()" style="
+              background: var(--tertiary);
+              color: var(--secondary);
+              border: none;
+              padding: 10px 20px;
+              border-radius: 4px;
+              cursor: pointer;
+            ">确定</button>
+          </div>
         `;
-        document.head.appendChild(style);
+        
+        document.body.appendChild(modal);
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) modal.remove();
+        });
+      }
 
-        // 添加到页面
+      // 显示抽奖表单
+      function showLotteryForm(toolbarEvent) {
+        console.log("🎲 显示抽奖表单");
+        
+        // 移除已存在的表单
+        const existing = document.querySelector('.lottery-form-modal');
+        if (existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.className = 'lottery-form-modal';
+        modal.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          background: rgba(0,0,0,0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 9999;
+        `;
+
+        const now = new Date();
+        const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+        const defaultTime = tomorrow.toISOString().slice(0, 16);
+
+        modal.innerHTML = `
+          <div style="
+            background: var(--secondary);
+            color: var(--primary);
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+            margin: 20px;
+          ">
+            <h3 style="margin: 0 0 20px 0; text-align: center;">创建抽奖活动</h3>
+            
+            <div style="margin-bottom: 15px;">
+              <label style="display: block; margin-bottom: 5px; font-weight: bold;">活动名称 *</label>
+              <input id="prize-name" type="text" placeholder="例如：iPhone 15 Pro 抽奖" style="
+                width: 100%;
+                padding: 8px;
+                border: 1px solid var(--primary-low);
+                border-radius: 4px;
+                background: var(--secondary);
+                color: var(--primary);
+              ">
+            </div>
+
+            <div style="margin-bottom: 15px;">
+              <label style="display: block; margin-bottom: 5px; font-weight: bold;">奖品说明 *</label>
+              <textarea id="prize-details" placeholder="详细描述奖品内容" rows="3" style="
+                width: 100%;
+                padding: 8px;
+                border: 1px solid var(--primary-low);
+                border-radius: 4px;
+                background: var(--secondary);
+                color: var(--primary);
+                resize: vertical;
+              "></textarea>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+              <label style="display: block; margin-bottom: 5px; font-weight: bold;">开奖时间 *</label>
+              <input id="draw-time" type="datetime-local" value="${defaultTime}" style="
+                width: 100%;
+                padding: 8px;
+                border: 1px solid var(--primary-low);
+                border-radius: 4px;
+                background: var(--secondary);
+                color: var(--primary);
+              ">
+            </div>
+
+            <div style="margin-bottom: 15px;">
+              <label style="display: block; margin-bottom: 5px; font-weight: bold;">获奖人数</label>
+              <input id="winners-count" type="number" value="1" min="1" max="50" style="
+                width: 100%;
+                padding: 8px;
+                border: 1px solid var(--primary-low);
+                border-radius: 4px;
+                background: var(--secondary);
+                color: var(--primary);
+              ">
+              <small style="color: var(--primary-medium);">如果填写了指定楼层，此项将被忽略</small>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+              <label style="display: block; margin-bottom: 5px; font-weight: bold;">指定中奖楼层（可选）</label>
+              <input id="specified-posts" type="text" placeholder="例如：8,18,28" style="
+                width: 100%;
+                padding: 8px;
+                border: 1px solid var(--primary-low);
+                border-radius: 4px;
+                background: var(--secondary);
+                color: var(--primary);
+              ">
+              <small style="color: var(--primary-medium);">用逗号分隔楼层号，填写此项将覆盖随机抽奖</small>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+              <label style="display: block; margin-bottom: 5px; font-weight: bold;">参与门槛 *</label>
+              <input id="min-participants" type="number" value="5" min="${siteSettings.lottery_min_participants_global || 5}" style="
+                width: 100%;
+                padding: 8px;
+                border: 1px solid var(--primary-low);
+                border-radius: 4px;
+                background: var(--secondary);
+                color: var(--primary);
+              ">
+              <small style="color: var(--primary-medium);">最少需要多少人参与才能开奖（不能低于${siteSettings.lottery_min_participants_global || 5}人）</small>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+              <label style="display: block; margin-bottom: 5px; font-weight: bold;">补充说明（可选）</label>
+              <textarea id="additional-notes" placeholder="其他需要说明的内容" rows="2" style="
+                width: 100%;
+                padding: 8px;
+                border: 1px solid var(--primary-low);
+                border-radius: 4px;
+                background: var(--secondary);
+                color: var(--primary);
+                resize: vertical;
+              "></textarea>
+            </div>
+
+            <div style="text-align: center;">
+              <button onclick="insertLottery()" style="
+                background: var(--tertiary);
+                color: var(--secondary);
+                border: none;
+                padding: 12px 24px;
+                border-radius: 4px;
+                cursor: pointer;
+                margin-right: 10px;
+                font-weight: bold;
+              ">插入抽奖</button>
+              <button onclick="this.closest('.lottery-form-modal').remove()" style="
+                background: var(--primary-low);
+                color: var(--primary);
+                border: none;
+                padding: 12px 24px;
+                border-radius: 4px;
+                cursor: pointer;
+              ">取消</button>
+            </div>
+          </div>
+        `;
+
         document.body.appendChild(modal);
 
-        // 绑定关闭事件
-        const okButton = modal.querySelector('.lottery-modal-ok');
-        const overlay = modal.querySelector('.lottery-modal-overlay');
+        // 插入抽奖逻辑
+        window.insertLottery = function() {
+          const prizeName = document.getElementById('prize-name').value.trim();
+          const prizeDetails = document.getElementById('prize-details').value.trim();
+          const drawTime = document.getElementById('draw-time').value;
+          const winnersCount = document.getElementById('winners-count').value;
+          const specifiedPosts = document.getElementById('specified-posts').value.trim();
+          const minParticipants = document.getElementById('min-participants').value;
+          const additionalNotes = document.getElementById('additional-notes').value.trim();
 
-        function closeModal() {
+          // 验证必填字段
+          if (!prizeName || !prizeDetails || !drawTime) {
+            alert('请填写所有必填字段！');
+            return;
+          }
+
+          // 验证时间
+          const drawDate = new Date(drawTime);
+          if (drawDate <= new Date()) {
+            alert('开奖时间必须是未来时间！');
+            return;
+          }
+
+          // 验证参与门槛
+          const globalMin = siteSettings.lottery_min_participants_global || 5;
+          if (parseInt(minParticipants) < globalMin) {
+            alert(`参与门槛不能低于${globalMin}人！`);
+            return;
+          }
+
+          // 构建抽奖内容
+          let lotteryContent = `\n[lottery]\n`;
+          lotteryContent += `活动名称：${prizeName}\n`;
+          lotteryContent += `奖品说明：${prizeDetails}\n`;
+          lotteryContent += `开奖时间：${drawTime}\n`;
+          
+          if (specifiedPosts) {
+            lotteryContent += `指定楼层：${specifiedPosts}\n`;
+          } else {
+            lotteryContent += `获奖人数：${winnersCount}\n`;
+          }
+          
+          lotteryContent += `参与门槛：${minParticipants}\n`;
+          
+          if (additionalNotes) {
+            lotteryContent += `补充说明：${additionalNotes}\n`;
+          }
+          
+          lotteryContent += `[/lottery]\n\n`;
+
+          console.log("🎲 插入抽奖内容");
+          
+          // 插入内容到编辑器
+          toolbarEvent.applySurround(lotteryContent, "", "");
+          
+          // 关闭模态框
           modal.remove();
-          style.remove();
-        }
+          
+          console.log("🎲 抽奖内容已插入");
+        };
 
-        okButton.addEventListener('click', closeModal);
-        overlay.addEventListener('click', (e) => {
-          if (e.target === overlay) {
-            closeModal();
+        // 点击外部关闭
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) {
+            modal.remove();
           }
         });
 
         // ESC键关闭
-        function handleEscape(e) {
+        const handleEsc = (e) => {
           if (e.key === 'Escape') {
-            closeModal();
-            document.removeEventListener('keydown', handleEscape);
+            modal.remove();
+            document.removeEventListener('keydown', handleEsc);
           }
-        }
-        document.addEventListener('keydown', handleEscape);
+        };
+        document.addEventListener('keydown', handleEsc);
       }
 
-      // 插入抽奖模板
-      function insertLotteryTemplate(toolbarEvent) {
-        const now = new Date();
-        const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-        const defaultTime = tomorrow.toISOString().slice(0, 16);
-        
-        const template = `\n[lottery]\n活动名称：请填写活动名称\n奖品说明：请描述奖品详情\n开奖时间：${defaultTime}\n获奖人数：1\n参与门槛：5\n补充说明：（可选）请填写补充说明\n[/lottery]\n\n`;
-        
-        console.log("🎲 Inserting lottery template");
-        toolbarEvent.applySurround(template, "", "");
-      }
-
-      // 修复4: 确保按钮样式正确
-      api.decorateCooked(() => {
-        // 确保工具栏按钮可见和可点击
-        setTimeout(() => {
-          const button = document.querySelector('.d-editor-button-bar #insertLottery');
-          if (button) {
-            button.style.pointerEvents = 'auto';
-            button.style.display = 'inline-flex';
-            console.log("🎲 Toolbar button found and styled");
-          }
-        }, 100);
-      });
-
-      console.log("🎲 Lottery: Toolbar integration completed");
+      console.log("🎲 Lottery: 工具栏集成完成");
     });
   },
 };
