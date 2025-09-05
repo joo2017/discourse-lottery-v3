@@ -1,5 +1,5 @@
 # name: discourse-lottery-v3
-# about: A comprehensive lottery plugin following discourse-calendar patterns
+# about: A comprehensive lottery plugin based on discourse-calendar patterns
 # version: 0.3.2
 # authors: [Your Name]
 # url: https://github.com/joo2017/discourse-lottery-v3
@@ -17,62 +17,59 @@ after_initialize do
   Rails.logger.info "🎲 LotteryPlugin: Starting initialization based on discourse-calendar patterns"
 
   # ===================================================================
-  # 模块定义 - 仿照discourse-calendar的模块结构
+  # 1. 自定义字段注册 - 基于discourse-calendar的实际方式
   # ===================================================================
   
   module ::DiscourseLottery
     PLUGIN_NAME = "discourse-lottery-v3"
-    LOTTERY_CUSTOM_FIELD = "lottery"
-    LOTTERY_DATA_CUSTOM_FIELD = "lottery_data"
+    LOTTERY_CUSTOM_FIELD = "lottery_data"
+    TOPIC_LOTTERY_FIELD = "topic_lottery_data"
   end
+  
+  # 注册自定义字段类型 - 只使用确实存在的API
+  register_post_custom_field_type(DiscourseLottery::LOTTERY_CUSTOM_FIELD, :json)
+  register_topic_custom_field_type(DiscourseLottery::TOPIC_LOTTERY_FIELD, :string)
+  
+  # 预加载字段用于主题列表
+  add_preloaded_topic_list_custom_field(DiscourseLottery::TOPIC_LOTTERY_FIELD)
+
+  Rails.logger.info "🎲 LotteryPlugin: Custom fields registered using calendar patterns"
 
   # ===================================================================
-  # 加载依赖文件 - 参照discourse-calendar的加载方式
+  # 2. 模型加载 - 安全加载
   # ===================================================================
   
+  plugin_path = File.dirname(__FILE__)
   [
-    "lib/lottery",
-    "lib/lottery_creator", 
-    "lib/lottery_manager"
-  ].each do |path|
-    load File.expand_path("../#{path}.rb", __FILE__)
+    "#{plugin_path}/lib/lottery.rb",
+    "#{plugin_path}/lib/lottery_creator.rb", 
+    "#{plugin_path}/lib/lottery_manager.rb"
+  ].each do |file_path|
+    if File.exist?(file_path)
+      load file_path
+      Rails.logger.debug "🎲 Loaded: #{file_path}"
+    end
   end
 
   # ===================================================================
-  # 自定义字段注册 - 完全按照discourse-calendar的方式
+  # 3. 模型关联 - 仿照discourse-calendar的方式
   # ===================================================================
   
-  register_post_custom_field_type(DiscourseLottery::LOTTERY_CUSTOM_FIELD, :string)
-  register_post_custom_field_type(DiscourseLottery::LOTTERY_DATA_CUSTOM_FIELD, :json)
-  
-  # 添加到默认的post custom fields - 仿照calendar插件
-  TopicView.default_post_custom_fields << DiscourseLottery::LOTTERY_CUSTOM_FIELD
-  TopicView.default_post_custom_fields << DiscourseLottery::LOTTERY_DATA_CUSTOM_FIELD
-
-  # ===================================================================
-  # 模型扩展 - 采用discourse-calendar的扩展模式
-  # ===================================================================
-  
-  # 等待表创建后再建立关联
   if ActiveRecord::Base.connection.table_exists?('lotteries')
     Topic.class_eval do
       has_many :lotteries, dependent: :destroy
-      
-      def has_lottery?
-        first_post&.custom_fields&.[](DiscourseLottery::LOTTERY_CUSTOM_FIELD).present? ||
-        lotteries.exists?
-      end
     end
 
-    Post.class_eval do
+    Post.class_eval do 
       has_many :lotteries, dependent: :destroy
       
+      # 添加lottery属性访问器
       def lottery
-        custom_fields[DiscourseLottery::LOTTERY_CUSTOM_FIELD]
+        @lottery ||= lotteries.first
       end
       
-      def lottery_data
-        custom_fields[DiscourseLottery::LOTTERY_DATA_CUSTOM_FIELD]
+      def has_lottery?
+        lottery.present?
       end
     end
 
@@ -82,21 +79,66 @@ after_initialize do
   end
 
   # ===================================================================
-  # 序列化器 - 仿照discourse-calendar的序列化模式
+  # 4. 事件处理 - 完全仿照discourse-calendar的模式
   # ===================================================================
   
-  add_to_serializer(:post, :lottery, include_condition: -> {
-    object.post_number == 1 && object.custom_fields[DiscourseLottery::LOTTERY_CUSTOM_FIELD].present?
-  }) do
-    object.custom_fields[DiscourseLottery::LOTTERY_CUSTOM_FIELD]
+  # 关键：这是discourse-calendar的核心模式
+  on(:post_created) do |post|
+    next unless SiteSetting.lottery_enabled
+    DiscourseLottery::LotteryProcessor.update_from_raw(post) if defined?(DiscourseLottery::LotteryProcessor)
   end
 
-  add_to_serializer(:post, :lottery_data, include_condition: -> {
-    object.post_number == 1 && object.custom_fields[DiscourseLottery::LOTTERY_DATA_CUSTOM_FIELD].present?
-  }) do
-    # 如果数据库表存在，优先从数据库获取最新数据
-    if ActiveRecord::Base.connection.table_exists?('lotteries') && object.topic.lotteries.exists?
-      lottery = object.topic.lotteries.first
+  on(:post_edited) do |post|
+    next unless SiteSetting.lottery_enabled
+    DiscourseLottery::LotteryProcessor.update_from_raw(post) if defined?(DiscourseLottery::LotteryProcessor)
+  end
+
+  on(:post_destroyed) do |post|
+    if SiteSetting.lottery_enabled && post.lottery
+      post.lottery.update!(status: 'cancelled')
+    end
+  end
+
+  # ===================================================================
+  # 5. 序列化器 - 仿照discourse-calendar的exact模式
+  # ===================================================================
+  
+  add_to_serializer(
+    :post,
+    :lottery,
+    include_condition: -> do
+      SiteSetting.lottery_enabled && 
+      object.post_number == 1 && 
+      !object.nil? && 
+      !object.deleted_at.present? &&
+      object.has_lottery?
+    end
+  ) do
+    if object.lottery
+      {
+        id: object.lottery.id,
+        prize_name: object.lottery.prize_name,
+        prize_details: object.lottery.prize_details,
+        draw_time: object.lottery.draw_time&.iso8601,
+        winners_count: object.lottery.winners_count,
+        min_participants: object.lottery.min_participants,
+        lottery_type: object.lottery.lottery_type,
+        status: object.lottery.status,
+        participants_count: object.lottery.try(:participants_count) || 0
+      }
+    end
+  end
+
+  add_to_serializer(
+    :topic_view,
+    :lottery,
+    include_condition: -> do
+      SiteSetting.lottery_enabled && object.topic&.first_post&.has_lottery?
+    end
+  ) do
+    first_post = object.topic.first_post
+    if first_post&.lottery
+      lottery = first_post.lottery
       {
         id: lottery.id,
         prize_name: lottery.prize_name,
@@ -104,238 +146,231 @@ after_initialize do
         draw_time: lottery.draw_time&.iso8601,
         winners_count: lottery.winners_count,
         min_participants: lottery.min_participants,
-        backup_strategy: lottery.backup_strategy,
         lottery_type: lottery.lottery_type,
-        specified_posts: lottery.specified_post_numbers,
         status: lottery.status,
-        additional_notes: lottery.try(:additional_notes),
-        prize_image: lottery.try(:prize_image)
+        participants_count: lottery.try(:participants_count) || 0,
+        can_edit: lottery.try(:in_regret_period?) || false
       }
-    else
-      # 备用：从custom_fields获取
-      object.custom_fields[DiscourseLottery::LOTTERY_DATA_CUSTOM_FIELD]
     end
   end
 
   # ===================================================================
-  # 事件处理 - 采用discourse-calendar的事件处理模式
+  # 6. 内容处理器 - discourse-calendar的核心逻辑
   # ===================================================================
   
-  # 参照discourse-calendar，监听post_created而不是topic_created
-  on(:post_created) do |post, opts, user|
-    next unless SiteSetting.lottery_enabled
-    next unless post.is_first_post?
-    
-    begin
-      # 检查是否有抽奖数据
-      lottery_data = extract_lottery_data_from_post(post, opts)
-      
-      if lottery_data.present?
-        Rails.logger.info "🎲 Processing lottery for post #{post.id}"
+  module ::DiscourseLottery
+    class LotteryProcessor
+      def self.update_from_raw(post)
+        return unless post.is_first_post?
+        return unless post.raw.present?
         
-        # 设置custom_fields
-        post.custom_fields[DiscourseLottery::LOTTERY_CUSTOM_FIELD] = "true"
-        post.custom_fields[DiscourseLottery::LOTTERY_DATA_CUSTOM_FIELD] = lottery_data
-        post.save_custom_fields
+        Rails.logger.info "🎲 LotteryProcessor: Processing post #{post.id}"
         
-        # 异步处理抽奖创建
-        Jobs.enqueue(:process_lottery_creation, {
-          topic_id: post.topic_id,
-          post_id: post.id,
-          lottery_data: lottery_data.to_json,
-          user_id: user.id
-        })
-      end
-    rescue => e
-      Rails.logger.error "🎲 Error in post_created handler: #{e.message}"
-    end
-  end
-
-  # 监听帖子编辑 - 参照discourse-calendar的编辑处理
-  on(:post_edited) do |post, topic_changed, user|
-    next unless SiteSetting.lottery_enabled
-    next unless post.is_first_post?
-    next unless post.custom_fields[DiscourseLottery::LOTTERY_CUSTOM_FIELD].present?
-    
-    begin
-      if ActiveRecord::Base.connection.table_exists?('lotteries')
-        lottery = post.topic.lotteries.where(status: 'running').first
-        next unless lottery&.in_regret_period?
+        # 查找lottery标记
+        lottery_match = post.raw.match(/\[lottery\](.*?)\[\/lottery\]/m)
         
-        # 重新解析帖子内容
-        new_lottery_data = extract_lottery_data_from_content(post.raw)
-        
-        if new_lottery_data.present?
-          post.custom_fields[DiscourseLottery::LOTTERY_DATA_CUSTOM_FIELD] = new_lottery_data
-          post.save_custom_fields
-          
-          Jobs.enqueue(:update_lottery_from_edit, {
-            lottery_id: lottery.id,
-            post_id: post.id,
-            lottery_data: new_lottery_data.to_json
-          })
-        end
-      end
-    rescue => e
-      Rails.logger.error "🎲 Error in post_edited handler: #{e.message}"
-    end
-  end
-
-  # ===================================================================
-  # 数据提取辅助方法 - 仿照discourse-calendar的数据处理
-  # ===================================================================
-  
-  def extract_lottery_data_from_post(post, opts)
-    # 方法1：从opts获取（composer传递）
-    if opts && opts[:lottery]
-      data = opts[:lottery]
-      return data.is_a?(String) ? JSON.parse(data) : data
-    end
-    
-    # 方法2：从帖子内容解析
-    return extract_lottery_data_from_content(post.raw) if post.raw.present?
-    
-    nil
-  rescue JSON::ParserError => e
-    Rails.logger.warn "🎲 JSON parse error: #{e.message}"
-    extract_lottery_data_from_content(post.raw) if post.raw.present?
-  end
-  
-  def extract_lottery_data_from_content(content)
-    return nil unless content.present?
-    
-    match = content.match(/\[lottery\](.*?)\[\/lottery\]/m)
-    return nil unless match
-    
-    data = {}
-    match[1].split("\n").each do |line|
-      line = line.strip
-      next unless line.include?('：')
-      
-      key, value = line.split('：', 2)
-      key, value = key.strip, value&.strip
-      
-      case key
-      when '活动名称' then data['prize_name'] = value
-      when '奖品说明' then data['prize_details'] = value  
-      when '开奖时间' then data['draw_time'] = value
-      when '获奖人数' then data['winners_count'] = value.to_i
-      when '指定楼层', '指定中奖楼层' then data['specified_posts'] = value if value.present?
-      when '参与门槛' 
-        match = value&.match(/\d+/)
-        data['min_participants'] = match[0].to_i if match
-      when '补充说明' then data['additional_notes'] = value if value.present?
-      when '奖品图片' then data['prize_image'] = value if value.present?
-      end
-    end
-    
-    data['backup_strategy'] = 'continue'
-    data.present? ? data : nil
-  end
-
-  # ===================================================================
-  # 后台任务 - 采用discourse-calendar的Jobs模式
-  # ===================================================================
-  
-  module ::Jobs
-    class ProcessLotteryCreation < ::Jobs::Base
-      def execute(args)
-        topic_id, post_id, user_id = args.values_at(:topic_id, :post_id, :user_id)
-        lottery_data = args[:lottery_data]
-        
-        Rails.logger.info "🎲 ProcessLotteryCreation: Processing post #{post_id}"
-        
-        begin
-          topic = Topic.find(topic_id)
-          post = Post.find(post_id) 
-          user = User.find(user_id)
-          
-          # 解析数据
-          parsed_data = JSON.parse(lottery_data).with_indifferent_access
-          
-          # 检查是否已存在抽奖（避免重复创建）
-          if ActiveRecord::Base.connection.table_exists?('lotteries') && 
-             topic.lotteries.exists?
-            Rails.logger.warn "🎲 Lottery already exists for topic #{topic_id}"
-            return
-          end
-          
-          # 创建抽奖记录
-          if defined?(LotteryCreator)
-            lottery = LotteryCreator.new(topic, parsed_data, user).create
-            
-            # 调度任务
-            schedule_lottery_tasks(lottery)
-            
-            # 通知前端
-            MessageBus.publish("/topic/#{topic.id}", {
-              type: "lottery_created",
-              lottery_id: lottery.id,
-              topic_id: topic.id
-            })
-            
-            Rails.logger.info "🎲 ProcessLotteryCreation: Success for lottery #{lottery.id}"
-          else
-            Rails.logger.error "🎲 LotteryCreator class not available"
-          end
-          
-        rescue => e
-          Rails.logger.error "🎲 ProcessLotteryCreation: #{e.message}"
-          post_error_to_topic(topic_id, e.message)
+        if lottery_match
+          Rails.logger.info "🎲 Found lottery content in post #{post.id}"
+          process_lottery_content(post, lottery_match[1])
+        else
+          # 如果没有lottery标记，删除现有的lottery
+          remove_existing_lottery(post)
         end
       end
 
       private
 
-      def schedule_lottery_tasks(lottery)
-        # 开奖任务
+      def self.process_lottery_content(post, content)
+        begin
+          # 解析内容
+          lottery_data = parse_lottery_content(content)
+          return unless lottery_data
+
+          # 验证数据
+          validate_lottery_data(lottery_data)
+
+          # 创建或更新lottery
+          lottery = post.lottery || post.lotteries.build
+          
+          if lottery.persisted?
+            # 更新现有lottery
+            update_existing_lottery(lottery, lottery_data, post.user)
+          else
+            # 创建新lottery
+            create_new_lottery(lottery, lottery_data, post)
+          end
+
+        rescue => e
+          Rails.logger.error "🎲 LotteryProcessor error: #{e.message}"
+          # 创建错误回复
+          create_error_reply(post, e.message)
+        end
+      end
+
+      def self.parse_lottery_content(content)
+        data = {}
+        content.split("\n").each do |line|
+          line = line.strip
+          next unless line.include?('：')
+          
+          key, value = line.split('：', 2)
+          key, value = key.strip, value&.strip
+          
+          case key
+          when '活动名称' then data[:prize_name] = value
+          when '奖品说明' then data[:prize_details] = value  
+          when '开奖时间' then data[:draw_time] = value
+          when '获奖人数' then data[:winners_count] = value.to_i
+          when '指定楼层', '指定中奖楼层' then data[:specified_posts] = value if value.present?
+          when '参与门槛' 
+            match = value&.match(/\d+/)
+            data[:min_participants] = match[0].to_i if match
+          when '补充说明' then data[:additional_notes] = value if value.present?
+          when '奖品图片' then data[:prize_image] = value if value.present?
+          end
+        end
+        
+        return nil if data[:prize_name].blank? || data[:prize_details].blank? || data[:draw_time].blank?
+        
+        data[:backup_strategy] = 'continue'
+        data[:lottery_type] = data[:specified_posts].present? ? 'specified' : 'random'
+        data
+      end
+
+      def self.validate_lottery_data(data)
+        # 基本验证
+        raise "活动名称不能为空" if data[:prize_name].blank?
+        raise "奖品说明不能为空" if data[:prize_details].blank?
+        raise "开奖时间不能为空" if data[:draw_time].blank?
+
+        # 时间验证
+        begin
+          draw_time = DateTime.parse(data[:draw_time])
+          raise "开奖时间必须是未来时间" if draw_time <= Time.current
+        rescue ArgumentError
+          raise "开奖时间格式无效"
+        end
+
+        # 参与门槛验证
+        global_min = SiteSetting.lottery_min_participants_global || 5
+        if data[:min_participants] < global_min
+          raise "参与门槛不能低于全局设置的 #{global_min} 人"
+        end
+      end
+
+      def self.create_new_lottery(lottery, data, post)
+        lottery.assign_attributes(
+          topic_id: post.topic_id,
+          post_id: post.id,
+          user_id: post.user_id,
+          prize_name: data[:prize_name],
+          prize_details: data[:prize_details],
+          draw_time: DateTime.parse(data[:draw_time]),
+          winners_count: data[:winners_count] || 1,
+          min_participants: data[:min_participants],
+          lottery_type: data[:lottery_type],
+          specified_post_numbers: data[:specified_posts],
+          status: 'running'
+        )
+
+        # 添加可选字段
+        lottery.additional_notes = data[:additional_notes] if lottery.respond_to?(:additional_notes=)
+        lottery.prize_image = data[:prize_image] if lottery.respond_to?(:prize_image=)
+
+        if lottery.save
+          Rails.logger.info "🎲 Created lottery #{lottery.id} for post #{post.id}"
+          
+          # 调度后台任务
+          schedule_lottery_tasks(lottery)
+          
+          # 添加标签
+          add_lottery_tag(post.topic)
+          
+          # 更新topic自定义字段
+          post.topic.custom_fields[DiscourseLottery::TOPIC_LOTTERY_FIELD] = 'active'
+          post.topic.save_custom_fields
+        else
+          raise "保存失败: #{lottery.errors.full_messages.join(', ')}"
+        end
+      end
+
+      def self.update_existing_lottery(lottery, data, user)
+        return unless lottery.try(:in_regret_period?)
+        
+        lottery.update!(
+          prize_name: data[:prize_name],
+          prize_details: data[:prize_details],
+          draw_time: DateTime.parse(data[:draw_time]),
+          winners_count: data[:winners_count] || 1,
+          min_participants: data[:min_participants],
+          lottery_type: data[:lottery_type],
+          specified_post_numbers: data[:specified_posts]
+        )
+        
+        Rails.logger.info "🎲 Updated lottery #{lottery.id}"
+      end
+
+      def self.remove_existing_lottery(post)
+        return unless post.lottery
+        
+        post.lottery.update!(status: 'cancelled')
+        Rails.logger.info "🎲 Cancelled lottery for post #{post.id}"
+      end
+
+      def self.schedule_lottery_tasks(lottery)
+        # 调度开奖任务
         Jobs.enqueue_at(lottery.draw_time, :execute_lottery_draw, lottery_id: lottery.id)
         
-        # 锁定任务
-        lock_delay = SiteSetting.lottery_post_lock_delay_minutes || 30
+        # 调度锁定任务
+        lock_delay = SiteSetting.lottery_post_lock_delay_minutes
         if lock_delay > 0
           lock_time = lottery.created_at + lock_delay.minutes
           Jobs.enqueue_at(lock_time, :lock_lottery_post, lottery_id: lottery.id)
         end
       end
 
-      def post_error_to_topic(topic_id, message)
+      def self.add_lottery_tag(topic)
+        begin
+          lottery_tag = Tag.find_or_create_by!(name: '抽奖中')
+          topic.tags << lottery_tag unless topic.tags.include?(lottery_tag)
+          topic.save!
+        rescue => e
+          Rails.logger.warn "🎲 Failed to add lottery tag: #{e.message}"
+        end
+      end
+
+      def self.create_error_reply(post, error_message)
         PostCreator.create!(
           Discourse.system_user,
-          topic_id: topic_id,
-          raw: "🚫 **抽奖创建失败**\n\n#{message}\n\n请检查抽奖信息格式并重新创建。"
+          topic_id: post.topic_id,
+          raw: "🚫 **抽奖创建失败**\n\n#{error_message}\n\n请检查抽奖信息格式并重新编辑。"
         )
       rescue => e
-        Rails.logger.error "🎲 Failed to post error: #{e.message}"
+        Rails.logger.error "🎲 Failed to create error reply: #{e.message}"
       end
     end
+  end
 
+  # ===================================================================
+  # 7. 后台任务 - 保持简洁
+  # ===================================================================
+  
+  module ::Jobs
     class ExecuteLotteryDraw < ::Jobs::Base
       def execute(args)
         lottery_id = args[:lottery_id]
         
         begin
-          return unless ActiveRecord::Base.connection.table_exists?('lotteries')
-          return unless defined?(Lottery) && defined?(LotteryManager)
+          return unless defined?(Lottery) && ActiveRecord::Base.connection.table_exists?('lotteries')
           
           lottery = Lottery.find(lottery_id)
-          Rails.logger.info "🎲 ExecuteLotteryDraw: Starting for #{lottery_id}"
+          return unless lottery.try(:can_draw?)
           
-          return unless lottery.can_draw?
+          if defined?(LotteryManager)
+            manager = LotteryManager.new(lottery)
+            manager.execute_draw
+          end
           
-          manager = LotteryManager.new(lottery)
-          result = manager.execute_draw
-          
-          # 通知前端
-          MessageBus.publish("/topic/#{lottery.topic_id}", {
-            type: result[:cancelled] ? "lottery_cancelled" : "lottery_completed",
-            lottery_id: lottery.id,
-            topic_id: lottery.topic_id,
-            status: lottery.status
-          })
-          
-        rescue ActiveRecord::RecordNotFound
-          Rails.logger.warn "🎲 ExecuteLotteryDraw: Lottery #{lottery_id} not found"
         rescue => e
           Rails.logger.error "🎲 ExecuteLotteryDraw: #{e.message}"
         end
@@ -347,45 +382,15 @@ after_initialize do
         lottery_id = args[:lottery_id]
         
         begin
-          return unless ActiveRecord::Base.connection.table_exists?('lotteries')
-          return unless defined?(Lottery)
+          return unless defined?(Lottery) && ActiveRecord::Base.connection.table_exists?('lotteries')
           
           lottery = Lottery.find(lottery_id)
-          return unless lottery.status == 'running'
+          return unless lottery.try(:running?)
           
-          post = lottery.post
-          post.update!(locked_by_id: Discourse.system_user.id)
-          
-          Rails.logger.info "🎲 LockLotteryPost: Locked post for lottery #{lottery_id}"
+          lottery.post.update!(locked_by_id: Discourse.system_user.id)
           
         rescue => e
           Rails.logger.error "🎲 LockLotteryPost: #{e.message}"
-        end
-      end
-    end
-
-    class UpdateLotteryFromEdit < ::Jobs::Base
-      def execute(args)
-        lottery_id, lottery_data = args.values_at(:lottery_id, :lottery_data)
-        
-        begin
-          return unless ActiveRecord::Base.connection.table_exists?('lotteries')
-          return unless defined?(Lottery) && defined?(LotteryCreator)
-          
-          lottery = Lottery.find(lottery_id)
-          return unless lottery.in_regret_period?
-          
-          parsed_data = JSON.parse(lottery_data).with_indifferent_access
-          LotteryCreator.new(lottery.topic, parsed_data, lottery.user).update_existing(lottery)
-          
-          MessageBus.publish("/topic/#{lottery.topic_id}", {
-            type: "lottery_updated",
-            lottery_id: lottery.id,
-            topic_id: lottery.topic_id
-          })
-          
-        rescue => e
-          Rails.logger.error "🎲 UpdateLotteryFromEdit: #{e.message}"
         end
       end
     end
