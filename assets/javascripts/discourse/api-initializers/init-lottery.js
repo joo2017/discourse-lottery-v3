@@ -396,4 +396,107 @@ export default apiInitializer("1.14.0", (api) => {
           
           let countdownText;
           if (days > 0) {
-            countdownText = `⏱️ 距离开奖：${day
+            countdownText = `⏱️ 距离开奖：${days}天 ${hours}小时`;
+          } else if (hours > 0) {
+            countdownText = `⏱️ 距离开奖：${hours}小时 ${minutes}分钟`;
+          } else {
+            countdownText = `⏱️ 距离开奖：${minutes}分钟`;
+          }
+          
+          const footer = widget.querySelector('.lottery-footer .participation-tip');
+          if (footer) {
+            footer.innerHTML = `${countdownText}<br>💡 <strong>参与方式：</strong>在本话题下回复即可参与抽奖`;
+          }
+          
+          setTimeout(updateCountdown, 60000); // 每分钟更新
+        } catch (error) {
+          console.error("🎲 Countdown update error:", error);
+        }
+      };
+      
+      updateCountdown();
+    } catch (error) {
+      console.error("🎲 Countdown initialization error:", error);
+    }
+  }
+  
+  function getStatusText(status) {
+    const statusMap = {
+      'running': '🏃 进行中',
+      'finished': '🎉 已开奖', 
+      'cancelled': '❌ 已取消'
+    };
+    return statusMap[status] || '🏃 进行中';
+  }
+  
+  function formatTime(timeString) {
+    if (!timeString) return '';
+    
+    try {
+      const date = new Date(timeString);
+      if (isNaN(date.getTime())) {
+        return timeString;
+      }
+      
+      return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit', 
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+    } catch (error) {
+      console.error("🎲 Time formatting error:", error);
+      return timeString;
+    }
+  }
+  
+  function escapeHtml(text) {
+    if (!text) return '';
+    try {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    } catch (error) {
+      return String(text).replace(/[&<>"']/g, function(m) {
+        const map = {
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;'
+        };
+        return map[m];
+      });
+    }
+  }
+  
+  // 页面切换清理
+  api.onPageChange(() => {
+    try {
+      // 清理模态框
+      document.querySelectorAll('.lottery-image-modal').forEach(modal => {
+        modal.remove();
+      });
+      
+      // 重置处理标记
+      processedElements = new WeakSet();
+    } catch (error) {
+      console.error("🎲 Cleanup error:", error);
+    }
+  });
+  
+  // 调试功能
+  if (debugMode) {
+    window.lotteryDebug = {
+      processedElements,
+      findLotteryElements,
+      processLotteryContent,
+      isValidElement
+    };
+    console.log("🎲 Debug mode enabled");
+  }
+  
+  console.log("🎲 Lottery: Display component initialization completed");
+});
