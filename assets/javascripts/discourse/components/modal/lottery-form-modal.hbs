@@ -167,4 +167,28 @@
               {{on "input" this.updateAdditionalNotes}}
               class="lottery-textarea"
               placeholder="其他需要说明的内容"
-              max
+              maxlength="300"
+              rows="2"
+            ></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+  </:body>
+
+  <:footer>
+    <DButton
+      @action={{this.submit}}
+      @disabled={{not this.isValid}}
+      @isLoading={{this.isLoading}}
+      class="btn-primary lottery-submit-btn"
+    >
+      {{#if this.isLoading}}
+        正在处理...
+      {{else}}
+        插入抽奖
+      {{/if}}
+    </DButton>
+    <DModalCancel @close={{this.cancel}} />
+  </:footer>
+</DModal>
