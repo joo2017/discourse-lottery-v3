@@ -1,3 +1,6 @@
+{{! assets/javascripts/discourse/components/modal/lottery-form-modal.hbs }}
+{{! CSP合规的DModal模板 }}
+
 <DModal
   @title="创建抽奖活动"
   @closeModal={{this.cancel}}
@@ -164,33 +167,4 @@
               {{on "input" this.updateAdditionalNotes}}
               class="lottery-textarea"
               placeholder="其他需要说明的内容"
-              maxlength="300"
-              rows="2"
-            ></textarea>
-          </div>
-        </div>
-      </div>
-    </div>
-  </:body>
-
-  <:footer>
-    <button
-      {{on "click" this.submit}}
-      disabled={{not this.isValid}}
-      class="btn btn-primary {{if this.isLoading 'loading'}}"
-    >
-      {{#if this.isLoading}}
-        正在处理...
-      {{else}}
-        插入抽奖
-      {{/if}}
-    </button>
-    <button
-      {{on "click" this.cancel}}
-      class="btn btn-flat"
-      disabled={{this.isLoading}}
-    >
-      取消
-    </button>
-  </:footer>
-</DModal>
+              max
