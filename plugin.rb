@@ -1,6 +1,6 @@
 # name: discourse-lottery-v3
 # about: A comprehensive lottery plugin based on discourse-calendar patterns
-# version: 0.3.2
+# version: 0.3.3
 # authors: [Your Name]
 # url: https://github.com/joo2017/discourse-lottery-v3
 # required_version: 3.1.0
@@ -13,11 +13,21 @@ register_asset "stylesheets/lottery-display.scss"
 
 register_svg_icon "dice"
 
+# CSP扩展支持 - 允许必要的外部资源
+extend_content_security_policy(
+  # 如果需要从外部加载图片，可以添加域名
+  img_src: %w[data: blob:],
+  # 如果需要连接外部API
+  connect_src: %w[self],
+  # 允许样式内联（如果必要）
+  style_src: %w[self 'unsafe-inline']
+)
+
 after_initialize do
-  Rails.logger.info "🎲 LotteryPlugin: Starting initialization based on discourse-calendar patterns"
+  Rails.logger.info "🎲 LotteryPlugin: Starting CSP-compliant initialization"
 
   # ===================================================================
-  # 1. 自定义字段注册 - 基于discourse-calendar的实际方式
+  # 1. 自定义字段注册
   # ===================================================================
   
   module ::DiscourseLottery
@@ -26,17 +36,14 @@ after_initialize do
     TOPIC_LOTTERY_FIELD = "topic_lottery_data"
   end
   
-  # 注册自定义字段类型 - 只使用确实存在的API
   register_post_custom_field_type(DiscourseLottery::LOTTERY_CUSTOM_FIELD, :json)
   register_topic_custom_field_type(DiscourseLottery::TOPIC_LOTTERY_FIELD, :string)
-  
-  # 预加载字段用于主题列表
   add_preloaded_topic_list_custom_field(DiscourseLottery::TOPIC_LOTTERY_FIELD)
 
-  Rails.logger.info "🎲 LotteryPlugin: Custom fields registered using calendar patterns"
+  Rails.logger.info "🎲 LotteryPlugin: Custom fields registered"
 
   # ===================================================================
-  # 2. 模型加载 - 安全加载
+  # 2. 模型加载
   # ===================================================================
   
   plugin_path = File.dirname(__FILE__)
@@ -52,7 +59,7 @@ after_initialize do
   end
 
   # ===================================================================
-  # 3. 模型关联 - 仿照discourse-calendar的方式
+  # 3. 模型关联
   # ===================================================================
   
   if ActiveRecord::Base.connection.table_exists?('lotteries')
@@ -63,7 +70,6 @@ after_initialize do
     Post.class_eval do 
       has_many :lotteries, dependent: :destroy
       
-      # 添加lottery属性访问器
       def lottery
         @lottery ||= lotteries.first
       end
@@ -79,10 +85,9 @@ after_initialize do
   end
 
   # ===================================================================
-  # 4. 事件处理 - 完全仿照discourse-calendar的模式
+  # 4. 事件处理
   # ===================================================================
   
-  # 关键：这是discourse-calendar的核心模式
   on(:post_created) do |post|
     next unless SiteSetting.lottery_enabled
     DiscourseLottery::LotteryProcessor.update_from_raw(post) if defined?(DiscourseLottery::LotteryProcessor)
@@ -100,7 +105,7 @@ after_initialize do
   end
 
   # ===================================================================
-  # 5. 序列化器 - 仿照discourse-calendar的exact模式
+  # 5. 序列化器
   # ===================================================================
   
   add_to_serializer(
@@ -155,7 +160,7 @@ after_initialize do
   end
 
   # ===================================================================
-  # 6. 内容处理器 - discourse-calendar的核心逻辑
+  # 6. 内容处理器
   # ===================================================================
   
   module ::DiscourseLottery
@@ -166,14 +171,12 @@ after_initialize do
         
         Rails.logger.info "🎲 LotteryProcessor: Processing post #{post.id}"
         
-        # 查找lottery标记
         lottery_match = post.raw.match(/\[lottery\](.*?)\[\/lottery\]/m)
         
         if lottery_match
           Rails.logger.info "🎲 Found lottery content in post #{post.id}"
           process_lottery_content(post, lottery_match[1])
         else
-          # 如果没有lottery标记，删除现有的lottery
           remove_existing_lottery(post)
         end
       end
@@ -182,27 +185,21 @@ after_initialize do
 
       def self.process_lottery_content(post, content)
         begin
-          # 解析内容
           lottery_data = parse_lottery_content(content)
           return unless lottery_data
 
-          # 验证数据
           validate_lottery_data(lottery_data)
 
-          # 创建或更新lottery
           lottery = post.lottery || post.lotteries.build
           
           if lottery.persisted?
-            # 更新现有lottery
             update_existing_lottery(lottery, lottery_data, post.user)
           else
-            # 创建新lottery
             create_new_lottery(lottery, lottery_data, post)
           end
 
         rescue => e
           Rails.logger.error "🎲 LotteryProcessor error: #{e.message}"
-          # 创建错误回复
           create_error_reply(post, e.message)
         end
       end
@@ -238,12 +235,10 @@ after_initialize do
       end
 
       def self.validate_lottery_data(data)
-        # 基本验证
         raise "活动名称不能为空" if data[:prize_name].blank?
         raise "奖品说明不能为空" if data[:prize_details].blank?
         raise "开奖时间不能为空" if data[:draw_time].blank?
 
-        # 时间验证
         begin
           draw_time = DateTime.parse(data[:draw_time])
           raise "开奖时间必须是未来时间" if draw_time <= Time.current
@@ -251,7 +246,6 @@ after_initialize do
           raise "开奖时间格式无效"
         end
 
-        # 参与门槛验证
         global_min = SiteSetting.lottery_min_participants_global || 5
         if data[:min_participants] < global_min
           raise "参与门槛不能低于全局设置的 #{global_min} 人"
@@ -273,20 +267,15 @@ after_initialize do
           status: 'running'
         )
 
-        # 添加可选字段
         lottery.additional_notes = data[:additional_notes] if lottery.respond_to?(:additional_notes=)
         lottery.prize_image = data[:prize_image] if lottery.respond_to?(:prize_image=)
 
         if lottery.save
           Rails.logger.info "🎲 Created lottery #{lottery.id} for post #{post.id}"
           
-          # 调度后台任务
           schedule_lottery_tasks(lottery)
-          
-          # 添加标签
           add_lottery_tag(post.topic)
           
-          # 更新topic自定义字段
           post.topic.custom_fields[DiscourseLottery::TOPIC_LOTTERY_FIELD] = 'active'
           post.topic.save_custom_fields
         else
@@ -318,10 +307,8 @@ after_initialize do
       end
 
       def self.schedule_lottery_tasks(lottery)
-        # 调度开奖任务
         Jobs.enqueue_at(lottery.draw_time, :execute_lottery_draw, lottery_id: lottery.id)
         
-        # 调度锁定任务
         lock_delay = SiteSetting.lottery_post_lock_delay_minutes
         if lock_delay > 0
           lock_time = lottery.created_at + lock_delay.minutes
@@ -352,7 +339,7 @@ after_initialize do
   end
 
   # ===================================================================
-  # 7. 后台任务 - 保持简洁
+  # 7. 后台任务
   # ===================================================================
   
   module ::Jobs
@@ -396,5 +383,5 @@ after_initialize do
     end
   end
 
-  Rails.logger.info "🎲 LotteryPlugin: Initialization complete using discourse-calendar patterns"
+  Rails.logger.info "🎲 LotteryPlugin: CSP-compliant initialization complete"
 end
