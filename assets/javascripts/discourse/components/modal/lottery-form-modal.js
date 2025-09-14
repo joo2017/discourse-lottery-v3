@@ -1,4 +1,6 @@
 // assets/javascripts/discourse/components/modal/lottery-form-modal.js
+// CSP合规的DModal组件
+
 import Component from "@glimmer/component";
 import { tracked } from "@glimmer/tracking";
 import { action } from "@ember/object";
@@ -128,47 +130,16 @@ export default class LotteryFormModal extends Component {
     this.isLoading = true;
     
     try {
-      const lotteryData = {
-        prize_name: this.prizeName.trim(), 
-        prize_details: this.prizeDetails.trim(),
-        draw_time: this.drawTime.trim(), 
-        winners_count: this.winnersCount,
-        specified_posts: this.specifiedPosts.trim(), 
-        min_participants: this.minParticipants,
-        backup_strategy: this.backupStrategy, 
-        additional_notes: this.additionalNotes.trim(),
-        prize_image: this.prizeImage.trim()
-      };
-      
-      const composer = this.args.model.composer;
-      const model = composer.get("model");
-      const lotteryJSON = JSON.stringify(lotteryData);
-
-      // 方法1：设置到model属性
-      model.set("lottery", lotteryJSON);
-
-      // 方法2：确保raw内容也包含标准化的抽奖标记
-      const placeholder = this.buildLotteryPlaceholder(lotteryData);
-      let currentContent = model.get("reply") || "";
-      currentContent = currentContent.replace(/\[lottery\](.*?)\[\/lottery\]/gs, '').trim();
-      const finalContent = currentContent + (currentContent ? '\n\n' : '') + placeholder;
-      model.set("reply", finalContent);
-
-      // 方法3：设置到custom_fields
-      if (!model.custom_fields) {
-        model.set("custom_fields", {});
-      }
-      model.set("custom_fields.lottery", lotteryJSON);
-
-      // 通知属性变更
-      model.notifyPropertyChange("lottery");
-      model.notifyPropertyChange("reply");
-      model.notifyPropertyChange("custom_fields");
-
-      console.log("🎲 抽奖数据已通过多重方式设置到composer");
+      const lotteryContent = this.buildLotteryContent();
       
       this.showFlash("抽奖信息已成功插入！", "success");
-      setTimeout(() => { this.args.closeModal(); }, 1000);
+      
+      // 返回结果给调用方
+      setTimeout(() => { 
+        this.args.closeModal({
+          lotteryContent: lotteryContent
+        });
+      }, 1000);
       
     } catch (error) {
       this.showFlash(`处理失败: ${error.message || '未知错误'}`, "error");
@@ -178,33 +149,33 @@ export default class LotteryFormModal extends Component {
     }
   }
 
-  buildLotteryPlaceholder(lotteryData) {
-    let placeholder = `[lottery]\n`;
-    placeholder += `活动名称：${lotteryData.prize_name}\n`;
-    placeholder += `奖品说明：${lotteryData.prize_details}\n`;
-    placeholder += `开奖时间：${lotteryData.draw_time}\n`;
+  buildLotteryContent() {
+    let placeholder = `\n[lottery]\n`;
+    placeholder += `活动名称：${this.prizeName.trim()}\n`;
+    placeholder += `奖品说明：${this.prizeDetails.trim()}\n`;
+    placeholder += `开奖时间：${this.drawTime.trim()}\n`;
     
-    if (lotteryData.specified_posts) {
-      placeholder += `指定楼层：${lotteryData.specified_posts}\n`;
+    if (this.specifiedPosts.trim()) {
+      placeholder += `指定楼层：${this.specifiedPosts.trim()}\n`;
     } else {
-      placeholder += `获奖人数：${lotteryData.winners_count}\n`;
+      placeholder += `获奖人数：${this.winnersCount}\n`;
     }
     
-    placeholder += `参与门槛：${lotteryData.min_participants}人\n`;
+    placeholder += `参与门槛：${this.minParticipants}人\n`;
     
-    if (lotteryData.backup_strategy === 'cancel') {
+    if (this.backupStrategy === 'cancel') {
       placeholder += `后备策略：人数不足时取消活动\n`;
     } else {
       placeholder += `后备策略：人数不足时继续开奖\n`;
     }
     
-    if (lotteryData.additional_notes) { 
-      placeholder += `补充说明：${lotteryData.additional_notes}\n`; 
+    if (this.additionalNotes.trim()) { 
+      placeholder += `补充说明：${this.additionalNotes.trim()}\n`; 
     }
-    if (lotteryData.prize_image) { 
-      placeholder += `奖品图片：${lotteryData.prize_image}\n`; 
+    if (this.prizeImage.trim()) { 
+      placeholder += `奖品图片：${this.prizeImage.trim()}\n`; 
     }
-    placeholder += `[/lottery]`;
+    placeholder += `[/lottery]\n\n`;
     
     return placeholder;
   }
