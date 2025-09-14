@@ -1,0 +1,82 @@
+<DModal @title="创建抽奖活动" @closeModal={{this.cancel}} class="simple-lottery-modal">
+  <:body>
+    <div class="lottery-simple-form">
+      <div class="control-group">
+        <label>活动名称 <span class="required">*</span></label>
+        <input 
+          value={{this.prizeName}}
+          {{on "input" this.updatePrizeName}}
+          placeholder="例如：iPhone 15 Pro 抽奖"
+          type="text"
+        />
+      </div>
+
+      <div class="control-group">
+        <label>奖品说明 <span class="required">*</span></label>
+        <textarea 
+          value={{this.prizeDetails}}
+          {{on "input" this.updatePrizeDetails}}
+          placeholder="详细描述奖品内容"
+          rows="3"
+        ></textarea>
+      </div>
+
+      <div class="control-group">
+        <label>开奖时间 <span class="required">*</span></label>
+        <input 
+          value={{this.drawTime}}
+          {{on "input" this.updateDrawTime}}
+          type="datetime-local"
+        />
+      </div>
+
+      <div class="control-group">
+        <label>获奖人数</label>
+        <input 
+          value={{this.winnersCount}}
+          {{on "input" this.updateWinnersCount}}
+          type="number"
+          min="1"
+          max="50"
+        />
+      </div>
+
+      <div class="control-group">
+        <label>指定中奖楼层（可选）</label>
+        <input 
+          value={{this.specifiedPosts}}
+          {{on "input" this.updateSpecifiedPosts}}
+          placeholder="例如：8,18,28"
+          type="text"
+        />
+      </div>
+
+      <div class="control-group">
+        <label>参与门槛 <span class="required">*</span></label>
+        <input 
+          value={{this.minParticipants}}
+          {{on "input" this.updateMinParticipants}}
+          type="number"
+          min={{this.globalMinParticipants}}
+        />
+      </div>
+
+      <div class="control-group">
+        <label>补充说明（可选）</label>
+        <textarea 
+          value={{this.additionalNotes}}
+          {{on "input" this.updateAdditionalNotes}}
+          placeholder="其他需要说明的内容"
+          rows="2"
+        ></textarea>
+      </div>
+    </div>
+  </:body>
+
+  <:footer>
+    <DButton @action={{this.submit}} class="btn-primary">
+      插入抽奖
+    </DButton>
+    <DModalCancel @close={{this.cancel}} />
+  </:footer>
+</DModal>
