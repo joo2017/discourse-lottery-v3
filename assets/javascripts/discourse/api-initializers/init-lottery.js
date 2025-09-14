@@ -1,10 +1,10 @@
 // assets/javascripts/discourse/api-initializers/init-lottery.js
-// 增强错误处理版本
+// CSP合规版本 - 移除所有内联事件处理器
 
 import { apiInitializer } from "discourse/lib/api";
 
 export default apiInitializer("1.14.0", (api) => {
-  console.log("🎲 Lottery: Initializing display component with robust error handling");
+  console.log("🎲 Lottery: 初始化CSP合规显示组件");
   
   const siteSettings = api.container.lookup('service:site-settings');
   
@@ -16,9 +16,8 @@ export default apiInitializer("1.14.0", (api) => {
   let processedElements = new WeakSet();
   let debugMode = window.location.search.includes('lottery_debug=1');
   
-  // 修复：更安全的decorateCooked实现
+  // CSP合规的decorateCooked实现
   api.decorateCooked((element, helper) => {
-    // 修复1：严格的输入验证
     if (!isValidElement(element)) {
       if (debugMode) {
         console.log("🎲 Invalid element:", typeof element, element);
@@ -62,7 +61,6 @@ export default apiInitializer("1.14.0", (api) => {
     }
     
     try {
-      // 方法1：安全的文本查找
       const lotteryElements = findLotteryElements(element);
       
       if (lotteryElements.length > 0) {
@@ -81,13 +79,11 @@ export default apiInitializer("1.14.0", (api) => {
     const results = [];
     
     try {
-      // 方法1：查找包含lottery标记的段落和div
       const textElements = element.querySelectorAll('p, div, span');
       
       textElements.forEach(el => {
         const text = el.textContent || '';
         if (text.includes('[lottery]') && text.includes('[/lottery]')) {
-          // 检查是否已处理
           if (!el.querySelector('.lottery-display-card') && 
               !el.nextElementSibling?.classList.contains('lottery-display-card')) {
             results.push(el);
@@ -95,11 +91,9 @@ export default apiInitializer("1.14.0", (api) => {
         }
       });
       
-      // 方法2：直接检查element本身
       const elementText = element.textContent || '';
       if (elementText.includes('[lottery]') && elementText.includes('[/lottery]') && 
           !element.querySelector('.lottery-display-card')) {
-        // 查找具体的文本节点
         const textNodes = getTextNodes(element);
         textNodes.forEach(node => {
           const text = node.textContent || '';
@@ -113,7 +107,7 @@ export default apiInitializer("1.14.0", (api) => {
       console.error("🎲 Error finding lottery elements:", error);
     }
     
-    return [...new Set(results)]; // 去重
+    return [...new Set(results)];
   }
   
   function getTextNodes(element) {
@@ -146,20 +140,16 @@ export default apiInitializer("1.14.0", (api) => {
       
       console.log("🎲 Processing lottery element with content");
       
-      // 解析抽奖数据
       const lotteryData = parseLotteryContent(lotteryMatch[1]);
       if (!lotteryData) {
         console.warn("🎲 Failed to parse lottery data");
         return;
       }
       
-      // 隐藏原始元素
       element.style.display = 'none';
       
-      // 创建并插入抽奖组件
       const lotteryWidget = createLotteryWidget(lotteryData);
       
-      // 安全插入
       if (element.parentNode) {
         element.parentNode.insertBefore(lotteryWidget, element.nextSibling);
         console.log("🎲 Lottery widget inserted successfully");
@@ -225,12 +215,10 @@ export default apiInitializer("1.14.0", (api) => {
         }
       });
       
-      // 设置抽奖类型
       if (!data.lottery_type) {
         data.lottery_type = data.specified_posts ? 'specified' : 'random';
       }
       
-      // 验证必填字段
       if (!data.prize_name || !data.prize_details || !data.draw_time) {
         console.warn("🎲 Missing required fields in lottery data");
         return null;
@@ -265,7 +253,7 @@ export default apiInitializer("1.14.0", (api) => {
         <div class="lottery-content">
           ${data.prize_image ? `
             <div class="lottery-image">
-              <img src="${escapeHtml(data.prize_image)}" alt="奖品图片" loading="lazy" />
+              <img src="${escapeHtml(data.prize_image)}" alt="奖品图片" loading="lazy" class="lottery-prize-image" />
             </div>
           ` : ''}
 
@@ -311,7 +299,7 @@ export default apiInitializer("1.14.0", (api) => {
         </div>
       `;
       
-      // 添加交互功能
+      // CSP合规的交互功能
       setTimeout(() => {
         addWidgetInteractions(widget, data);
       }, 100);
@@ -333,12 +321,15 @@ export default apiInitializer("1.14.0", (api) => {
     return widget;
   }
   
+  // CSP合规的交互功能
   function addWidgetInteractions(widget, data) {
     try {
-      // 图片点击放大
-      const image = widget.querySelector('.lottery-image img');
+      // 图片点击放大 - 使用事件委托
+      const image = widget.querySelector('.lottery-prize-image');
       if (image) {
-        image.addEventListener('click', function() {
+        image.style.cursor = 'pointer';
+        image.addEventListener('click', function(event) {
+          event.preventDefault();
           showImageModal(image.src);
         });
       }
@@ -353,18 +344,47 @@ export default apiInitializer("1.14.0", (api) => {
   }
   
   function showImageModal(imageSrc) {
-    // 实现图片模态框
     try {
+      // 移除已存在的模态框
+      const existingModal = document.querySelector('.lottery-image-modal');
+      if (existingModal) {
+        existingModal.remove();
+      }
+      
       const modal = document.createElement('div');
       modal.className = 'lottery-image-modal';
       modal.innerHTML = `
-        <div class="modal-backdrop" onclick="this.parentElement.remove()">
-          <div class="modal-content" onclick="event.stopPropagation()">
-            <img src="${imageSrc}" alt="奖品图片" />
-            <button class="close-btn" onclick="this.closest('.lottery-image-modal').remove()">×</button>
+        <div class="modal-backdrop">
+          <div class="modal-content">
+            <img src="${escapeHtml(imageSrc)}" alt="奖品图片" />
+            <button class="close-btn" type="button">×</button>
           </div>
         </div>
       `;
+      
+      // CSP合规的事件处理
+      const backdrop = modal.querySelector('.modal-backdrop');
+      const closeBtn = modal.querySelector('.close-btn');
+      
+      const closeModal = () => {
+        modal.remove();
+        document.removeEventListener('keydown', handleEsc);
+      };
+      
+      const handleEsc = (event) => {
+        if (event.key === 'Escape') {
+          closeModal();
+        }
+      };
+      
+      backdrop.addEventListener('click', (event) => {
+        if (event.target === backdrop) {
+          closeModal();
+        }
+      });
+      
+      closeBtn.addEventListener('click', closeModal);
+      document.addEventListener('keydown', handleEsc);
       
       document.body.appendChild(modal);
     } catch (error) {
@@ -408,7 +428,7 @@ export default apiInitializer("1.14.0", (api) => {
             footer.innerHTML = `${countdownText}<br>💡 <strong>参与方式：</strong>在本话题下回复即可参与抽奖`;
           }
           
-          setTimeout(updateCountdown, 60000); // 每分钟更新
+          setTimeout(updateCountdown, 60000);
         } catch (error) {
           console.error("🎲 Countdown update error:", error);
         }
@@ -498,5 +518,5 @@ export default apiInitializer("1.14.0", (api) => {
     console.log("🎲 Debug mode enabled");
   }
   
-  console.log("🎲 Lottery: Display component initialization completed");
+  console.log("🎲 Lottery: CSP合规显示组件初始化完成");
 });
