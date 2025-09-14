@@ -1,5 +1,5 @@
-// assets/stylesheets/lottery-display.scss - 修复版本
-// 基于discourse-calendar的样式最佳实践
+// assets/stylesheets/lottery-display.scss
+// CSP合规版本 - 添加模态框和交互样式
 
 .lottery-display-card {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -10,8 +10,6 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   position: relative;
   max-width: 100%;
-  
-  // 修复：防止内容溢出
   word-wrap: break-word;
   overflow-wrap: break-word;
 
@@ -34,8 +32,6 @@
     justify-content: space-between;
     align-items: center;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    
-    // 修复：响应式布局
     flex-wrap: wrap;
     gap: 10px;
 
@@ -49,7 +45,6 @@
       .lottery-icon {
         font-size: 28px;
         filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
-        // 修复：防止emoji在某些浏览器中显示异常
         font-family: "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
       }
 
@@ -59,7 +54,6 @@
         font-size: 20px;
         font-weight: 600;
         text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        // 修复：长文本换行
         word-break: break-word;
         line-height: 1.3;
       }
@@ -87,13 +81,12 @@
       text-align: center;
       margin-bottom: 20px;
       
-      img {
+      .lottery-prize-image {
         max-width: 100%;
         max-height: 300px;
         border-radius: 8px;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
         object-fit: cover;
-        cursor: pointer;
         transition: transform 0.2s ease;
         
         &:hover {
@@ -117,14 +110,12 @@
           font-weight: 600;
           color: #4a5568;
           flex-shrink: 0;
-          // 修复：emoji显示
           font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
 
         .value {
           color: #2d3748;
           flex: 1;
-          // 修复：确保长文本正确换行
           word-break: break-word;
           line-height: 1.4;
         }
@@ -144,7 +135,6 @@
       line-height: 1.5;
     }
     
-    // 修复：倒计时样式
     .countdown-ended {
       color: #ffd700;
       font-weight: 600;
@@ -156,7 +146,6 @@
     }
   }
 
-  // 修复：不同状态的样式
   &.lottery-status-finished {
     background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
   }
@@ -165,7 +154,6 @@
     background: linear-gradient(135deg, #fc4a1a 0%, #f7b733 100%);
   }
 
-  // 修复：响应式设计
   @media (max-width: 768px) {
     margin: 15px 0;
     
@@ -226,7 +214,7 @@
   }
 }
 
-// 修复：图片模态框样式
+// CSP合规的图片模态框样式
 .lottery-image-modal {
   position: fixed;
   top: 0;
@@ -278,6 +266,7 @@
       align-items: center;
       justify-content: center;
       transition: background-color 0.2s ease;
+      color: #333;
       
       &:hover {
         background: rgba(255, 255, 255, 1);
@@ -286,13 +275,77 @@
   }
 }
 
-// 修复：与Discourse主题的兼容性
+// 简化模态框样式
+.lottery-simple-modal {
+  .lottery-modal-content {
+    .form-group {
+      margin-bottom: 15px;
+      
+      label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+        color: var(--primary);
+      }
+      
+      input, textarea, select {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid var(--primary-low);
+        border-radius: 4px;
+        background: var(--secondary);
+        color: var(--primary);
+        box-sizing: border-box;
+        font-family: inherit;
+        
+        &:focus {
+          outline: none;
+          border-color: var(--tertiary);
+          box-shadow: 0 0 0 2px rgba(var(--tertiary-rgb), 0.2);
+        }
+      }
+      
+      textarea {
+        resize: vertical;
+        min-height: 60px;
+      }
+      
+      small {
+        color: var(--primary-medium);
+        font-size: 12px;
+        display: block;
+        margin-top: 4px;
+      }
+    }
+    
+    .lottery-submit-btn, .lottery-cancel-btn {
+      font-family: inherit;
+      transition: all 0.2s ease;
+      
+      &:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      }
+      
+      &:active {
+        transform: translateY(0);
+      }
+      
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+      }
+    }
+  }
+}
+
+// 与Discourse主题的兼容性
 .topic-post .lottery-display-card {
-  // 确保在帖子中正确显示
   margin: 1em 0;
 }
 
-// 修复：暗色主题兼容
+// 暗色主题兼容
 body.dark-mode {
   .lottery-display-card {
     .lottery-content {
@@ -309,9 +362,16 @@ body.dark-mode {
       }
     }
   }
+  
+  .lottery-simple-modal {
+    .lottery-modal-content {
+      background: var(--secondary) !important;
+      color: var(--primary) !important;
+    }
+  }
 }
 
-// 修复：打印样式
+// 打印样式
 @media print {
   .lottery-display-card {
     background: white !important;
@@ -336,7 +396,8 @@ body.dark-mode {
     }
   }
   
-  .lottery-image-modal {
+  .lottery-image-modal,
+  .lottery-simple-modal {
     display: none !important;
   }
 }
